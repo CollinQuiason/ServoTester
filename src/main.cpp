@@ -1,11 +1,12 @@
 #include <Arduino.h>
 #include <Wire.h>
 
-#include "ESP32Encoder.h"
+#include <RotaryEncoder.h>
 #include "ssd1306.h"
 
 /* ######## Config */
   // IO
+constexpr uint32_t SCREEN_UPDATE_RATE_MS = 50;
 constexpr uint8_t USB_OVER_UART_BAUD = 9600;
   // Pin Definitions
 constexpr uint8_t VOLTAGE_PIN_1 = 36;
@@ -22,7 +23,13 @@ constexpr int8_t EDGES_PER_DETENT = 4;
 
 /* ######## Globals */
   // Encoder
-ESP32Encoder encoder;
+RotaryEncoder encoder(
+    ENCODER_A,
+    ENCODER_B,
+    RotaryEncoder::LatchMode::FOUR3
+);
+long previousEncoderPosition = 0;
+long selectedValue = 0;
 
 bool buttonHeld() {
     return !digitalRead(ENCODER_BUTTON);
@@ -51,57 +58,54 @@ void setup() {
     printf("OLED panel initialized!\n");
       // Encoder
     printf("Initializing encoder...\n");
-    ESP32Encoder::useInternalWeakPullResistors = puType::up;
-    encoder.attachFullQuad(ENCODER_A, ENCODER_B);
-    encoder.setFilter(1023);
-    encoder.clearCount();
     pinMode(ENCODER_BUTTON, INPUT_PULLUP);
     printf("Encoder initialized!\n");
       // Done
     printf("Setup done!\n");
 }
 
-// void loop() {
-//     float rawMV1 = analogReadMilliVolts(VOLTAGE_PIN_1);
-//     float rawMV2 = analogReadMilliVolts(VOLTAGE_PIN_2);
-//     float adjustedV1 = rawMV1 * DIVIDER_RATIO / 1000.0f;
-//     float adjustedV2 = rawMV2 * DIVIDER_RATIO / 1000.0f;
-//
-//     /* ######## Screen Updates */
-//       // Formatting
-//     char rawVsens1Charp[10];
-//     char rawVsens2Charp[10];
-//     char selectedValueCharp[10];
-//     snprintf(rawVsens1Charp, sizeof(rawVsens1Charp), "%.3f", adjustedV1);
-//     snprintf(rawVsens2Charp, sizeof(rawVsens2Charp), "%.3f", adjustedV2);
-//       // Output
-//     ssd1306_printFixed(0, 8,  rawVsens1Charp, STYLE_NORMAL);
-//     ssd1306_printFixed(0, 16,  rawVsens2Charp, STYLE_NORMAL);
-//
-//
-//
-//     if (buttonHeld()) {
-//         ssd1306_printFixed(0, 32, "Pressed!", STYLE_NORMAL);
-//     } else {
-//         ssd1306_printFixed(0, 32, "        ", STYLE_NORMAL);
-//     }
-//
-//     printf(reinterpret_cast<const char*>(encoder.getCount()));
-//
-//     char interruptCountCharp[10];
-//     snprintf(interruptCountCharp, sizeof(interruptCountCharp), "%d", encoder.getCount());
-//     ssd1306_printFixed(0, 40,  interruptCountCharp, STYLE_NORMAL);
-// }
-
-void loop()
-{
+void loop() {
+    /* ######## Tick Layer */
+      // Encoder
     encoder.tick();
 
-    static long previous = 0;
-    long position = encoder.getPosition();
+    /* ######## Peripheral Measurement Layer */
+      // LM2596 Buck voltage sens
+    float rawMV1 = analogReadMilliVolts(VOLTAGE_PIN_1);
+    float rawMV2 = analogReadMilliVolts(VOLTAGE_PIN_2);
 
-    if (position != previous) {
-        previous = position;
-        // Update selected value.
+    /* ######## Compute Layer */
+    // LM2596 Buck voltage sens
+    float adjustedV1 = rawMV1 * DIVIDER_RATIO / 1000.0f;
+    float adjustedV2 = rawMV2 * DIVIDER_RATIO / 1000.0f;
+
+    /* ######## Control Layer */
+
+
+
+    /* ######## UI Update Layer */
+    static uint32_t lastScreenUpdate = 0;
+    if (millis() - lastScreenUpdate >= SCREEN_UPDATE_RATE_MS) {
+
+          // Formatting
+            // LM2596 Buck voltage sens
+        char rawVsens1Charp[10];
+        char rawVsens2Charp[10];
+        snprintf(rawVsens1Charp, sizeof(rawVsens1Charp), "%.3f", adjustedV1);
+        snprintf(rawVsens2Charp, sizeof(rawVsens2Charp), "%.3f", adjustedV2);
+            // Encoder
+        char encoderPosCharp[10];
+        snprintf(encoderPosCharp, sizeof(encoderPosCharp), "%ld", encoder.getPosition());
+          // Output
+            // LM2596 Buck voltage sens
+        ssd1306_printFixed(0, 8,  rawVsens1Charp, STYLE_NORMAL);
+        ssd1306_printFixed(0, 16,  rawVsens2Charp, STYLE_NORMAL);
+            // Encoder
+        ssd1306_printFixed(0, 32, buttonHeld() ? "Pressed!" : "        ", STYLE_NORMAL);
+        ssd1306_printFixed(0, 32, encoderPosCharp, STYLE_NORMAL);
+
+
+        lastScreenUpdate = millis();
     }
 }
+

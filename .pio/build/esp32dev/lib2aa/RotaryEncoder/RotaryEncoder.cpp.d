@@ -1,4 +1,6 @@
-.pio/build/esp32dev/src/main.cpp.o: src/main.cpp \
+.pio/build/esp32dev/lib2aa/RotaryEncoder/RotaryEncoder.cpp.o: \
+ .pio/libdeps/esp32dev/RotaryEncoder/src/RotaryEncoder.cpp \
+ .pio/libdeps/esp32dev/RotaryEncoder/src/RotaryEncoder.h \
  C:/Users/colli/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
  C:/Users/colli/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp_arduino_version.h \
  C:/Users/colli/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/freertos/include/freertos/FreeRTOS.h \
@@ -132,31 +134,4 @@
  C:/Users/colli/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/spi_flash/include/esp_spi_flash_counters.h \
  C:/Users/colli/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/esp_hw_support/include/soc/esp32/spiram.h \
  C:/Users/colli/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
- C:/Users/colli/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
- C:/Users/colli/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src/Wire.h \
- C:/Users/colli/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal.h \
- .pio/libdeps/esp32dev/RotaryEncoder/src/RotaryEncoder.h \
- .pio/libdeps/esp32dev/ssd1306/src/ssd1306.h \
- .pio/libdeps/esp32dev/ssd1306/src/nano_gfx_types.h \
- .pio/libdeps/esp32dev/ssd1306/src/ssd1306_hal/io.h \
- .pio/libdeps/esp32dev/ssd1306/src/ssd1306_hal/UserSettings.h \
- .pio/libdeps/esp32dev/ssd1306/src/ssd1306_hal/arduino/io.h \
- .pio/libdeps/esp32dev/ssd1306/src/ssd1306_generic.h \
- .pio/libdeps/esp32dev/ssd1306/src/ssd1306_1bit.h \
- .pio/libdeps/esp32dev/ssd1306/src/ssd1306_8bit.h \
- .pio/libdeps/esp32dev/ssd1306/src/ssd1306_16bit.h \
- .pio/libdeps/esp32dev/ssd1306/src/ssd1306_fonts.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/lcd_common.h \
- .pio/libdeps/esp32dev/ssd1306/src/ssd1306_hal/io.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/oled_ssd1306.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/oled_ssd1325.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/lcd_common.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/oled_ssd1327.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/oled_ssd1331.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/oled_ssd1351.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/oled_sh1106.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/lcd_pcd8544.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/lcd_il9163.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/lcd_ili9341.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/composite_video.h \
- .pio/libdeps/esp32dev/ssd1306/src/lcd/oled_template.h
+ C:/Users/colli/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h
