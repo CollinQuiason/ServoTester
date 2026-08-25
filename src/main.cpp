@@ -14,7 +14,7 @@
 constexpr uint32_t SCREEN_UPDATE_RATE_MS = 50;
 constexpr uint32_t USB_OVER_UART_BAUD    = 9600;
 constexpr uint8_t  PWM_RESOLUTION        = 12;
-constexpr uint32_t PWM_FREQUENCY         = 1000;
+constexpr uint32_t PWM_FREQUENCY         = 5000;
 // Pin Definitions
 constexpr uint8_t VOLTAGE_PIN_1              = 36;
 constexpr uint8_t VOLTAGE_PIN_2              = 39;

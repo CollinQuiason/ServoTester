@@ -55,6 +55,7 @@ class UserInterface {
         bool    editingGainDigit_    = false;
 
         float   errorGraphHistory_[128] = {};
+        float   errorGraphScale_        = 0.1f;
         uint8_t errorGraphStart_        = 0;
         uint8_t errorGraphCount_        = 0;
 

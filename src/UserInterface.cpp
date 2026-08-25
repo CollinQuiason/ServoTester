@@ -255,6 +255,12 @@ UserAction UserInterface::createUserAction(
 
     const float delta = static_cast<float>(inputEvent.encoderDelta);
 
+    if (screen_ == Screen::ErrorGraph) {
+        return UserAction::adjustVoltageSetPoint(
+                                                 delta * VOLTAGE_SET_POINT_STEP
+                                                );
+    }
+
     if (screen_ == Screen::Dashboard) {
         if (selectedDashboardColumn_ == 0) {
             return UserAction::adjustVoltageSetPoint(
@@ -452,6 +458,7 @@ bool UserInterface::renderPidMenu(
         if (selectedPidItem_ == 0) {
             errorGraphStart_ = 0;
             errorGraphCount_ = 0;
+            errorGraphScale_ = 0.1f;
             openScreen(Screen::ErrorGraph);
             return false;
         }
@@ -508,14 +515,25 @@ bool UserInterface::renderErrorGraph(
 
     maxAbsoluteError *= 1.1f;
 
-    uint8_t graphBuffer[128 * 48 / 8] = {};
+    if (maxAbsoluteError > errorGraphScale_) {
+        errorGraphScale_ = maxAbsoluteError;
+    }
+    else {
+        errorGraphScale_ *= 0.98f;
 
-    // Dashed zero-error line.
-    for (uint8_t x = 0; x < 128; x += 2) {
-        graphBuffer[(23 / 8) * 128 + x] |= 1 << (23 % 8);
+        if (errorGraphScale_ < maxAbsoluteError) {
+            errorGraphScale_ = maxAbsoluteError;
+        }
     }
 
-    int previousY = 23;
+    uint8_t graphBuffer[128 * 48 / 8] = {};
+
+    // Dotted zero-error line.
+    for (uint8_t x = 0; x < 128; x += 2) {
+        graphBuffer[(24 / 8) * 128 + x] |= 1 << (24 % 8);
+    }
+
+    int previousY = 24;
 
     for (uint16_t i = 0; i < errorGraphCount_; ++i) {
         const uint8_t x = static_cast<uint8_t>(
@@ -523,9 +541,11 @@ bool UserInterface::renderErrorGraph(
             );
         const float error = errorGraphHistory_[
                 (errorGraphStart_ + i) % 128
-            ];
-        int y = static_cast<int>(23.0f - error / maxAbsoluteError * 22.0f);
-        y = constrain(y, 1, 45);
+        ];
+        int y = static_cast<int>(
+                24.0f - error / errorGraphScale_ * 24.0f
+            );
+        y = constrain(y, 0, 47);
 
         const int firstY = i == 0 || y < previousY ? y : previousY;
         const int lastY  = i == 0 || y > previousY ? y : previousY;
@@ -538,6 +558,7 @@ bool UserInterface::renderErrorGraph(
     }
 
     ssd1306_drawBufferFast(0, 0, 128, 48, graphBuffer);
+
     return true;
 }
 
@@ -673,6 +694,34 @@ void UserInterface::renderStatusBar() const {
 
     snprintf(line, sizeof(line), "ERR %6.3f", systemState_->vError1);
     ssd1306_printFixed(0, 56, line, STYLE_NORMAL);
+
+    if (screen_ == Screen::ErrorGraph) {
+        const float maximumVoltage =
+                systemState_->vSetPoint1 + errorGraphScale_;
+        const float minimumVoltage =
+                systemState_->vSetPoint1 - errorGraphScale_;
+        const int voltagePrecision = maximumVoltage < 100.0f ? 2 :
+                maximumVoltage < 1000.0f ? 1 : 0;
+
+        snprintf(
+                 line,
+                 sizeof(line),
+                 "MAX %5.*fV",
+                 voltagePrecision,
+                 maximumVoltage
+                );
+        ssd1306_printFixed(66, 48, line, STYLE_NORMAL);
+
+        snprintf(
+                 line,
+                 sizeof(line),
+                 "MIN %5.*fV",
+                 voltagePrecision,
+                 minimumVoltage
+                );
+        ssd1306_printFixed(66, 56, line, STYLE_NORMAL);
+        return;
+    }
 
     // Output column
     snprintf(
