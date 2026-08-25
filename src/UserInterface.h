@@ -16,6 +16,7 @@ class UserInterface {
                       uint8_t            encoderButtonPin);
 
         void       begin(); // Does not mutate SystemState.
+        void       IRAM_ATTR onEncoderInterrupt();
         UserAction tick();
 
     private:

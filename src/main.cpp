@@ -31,12 +31,6 @@ constexpr int8_t   EDGES_PER_DETENT = 4;
 
 
 /* ######## Globals */
-// Encoder
-RotaryEncoder encoder(
-                      ENCODER_A,
-                      ENCODER_B,
-                      RotaryEncoder::LatchMode::FOUR3
-                     );
 SystemState systemState = {
             .v1 = 0.0f,
             .v2 = 0.0f,
@@ -53,11 +47,14 @@ UserInterface ui(
                  ENCODER_A,
                  ENCODER_B,
                  ENCODER_BUTTON);
-long previousEncoderPosition = 0;
-long selectedValue           = 0;
 // Voltage modulation
 float         vSetPoint1 = 0.0f;
 constexpr int PWM_MAX    = (1 << PWM_RESOLUTION) - 1;
+
+
+void IRAM_ATTR handleEncoderInterrupt() {
+    ui.onEncoderInterrupt();
+}
 
 
 void handleUserAction(const UserAction& action) {
@@ -108,7 +105,6 @@ void handleUserAction(const UserAction& action) {
 
         case UserAction::Type::None:
             break;
-    Serial.println("User action handled!");
     }
 }
 
@@ -137,6 +133,16 @@ void setup() {
     // Encoder
     Serial.print("Initializing encoder...\n");
     pinMode(ENCODER_BUTTON, INPUT_PULLUP);
+    attachInterrupt(
+                    digitalPinToInterrupt(ENCODER_A),
+                    handleEncoderInterrupt,
+                    CHANGE
+                   );
+    attachInterrupt(
+                    digitalPinToInterrupt(ENCODER_B),
+                    handleEncoderInterrupt,
+                    CHANGE
+                   );
     Serial.print("Encoder initialized!\n");
     // Done
     Serial.print("Setup done!\n");

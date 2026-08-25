@@ -91,6 +91,10 @@ void UserInterface::begin() {
 }
 
 
+void IRAM_ATTR UserInterface::onEncoderInterrupt() {
+    encoder_.tick();
+}
+
 UserAction UserInterface::tick() {
     const uint32_t nowMs = millis();
 
