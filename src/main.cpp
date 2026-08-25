@@ -10,7 +10,6 @@
 #include "UserAction.h"
 
 /* ######## Config */
-constexpr bool debugMode = false;
 // IO
 constexpr uint32_t SCREEN_UPDATE_RATE_MS = 50;
 constexpr uint32_t USB_OVER_UART_BAUD    = 9600;
@@ -37,8 +36,8 @@ SystemState systemState = {
             .vSetPoint1 = 0.0f,
             .vFBDutyCycle = 0.0f,
             .vError1 = 0.0f,
-            .voltNetPGain = 0.05f, // Duty cycle %s per volt
-            .voltNetIGain = 1.0f,
+            .voltNetPGain = 1.7f, // Duty cycle % per volt
+            .voltNetIGain = 0.7f,  // Duty cycle % per volt-second
             .voltNetDGain = 1.0f,
             .servoAngle = 90.0f
         };
@@ -48,8 +47,9 @@ UserInterface ui(
                  ENCODER_B,
                  ENCODER_BUTTON);
 // Voltage modulation
-float         vSetPoint1 = 0.0f;
-constexpr int PWM_MAX    = (1 << PWM_RESOLUTION) - 1;
+constexpr int PWM_MAX                    = (1 << PWM_RESOLUTION) - 1;
+float         voltageIntegralDutyPercent = 100.0f;
+uint32_t      previousVoltageControlUs   = 0;
 
 
 void IRAM_ATTR handleEncoderInterrupt() {
@@ -61,11 +61,6 @@ void handleUserAction(const UserAction& action) {
     if (action.type() == UserAction::Type::None) {
         return;
     }
-    if (debugMode) {
-        Serial.println("Handling user action...");
-        Serial.println("Action type: " + String(static_cast<int>(action.type())));
-        Serial.println("Action delta: " + String(action.delta()));
-    }
     switch (action.type()) {
         case UserAction::Type::AdjustVoltageSetPoint:
             systemState.vSetPoint1 += action.delta();
@@ -73,34 +68,34 @@ void handleUserAction(const UserAction& action) {
 
         case UserAction::Type::AdjustServoAngle:
             systemState.servoAngle = constrain(
-                                                  systemState.servoAngle + action.delta(),
-                                                  0.0f,
-                                                  180.0f
-                                                 );
+                                               systemState.servoAngle + action.delta(),
+                                               0.0f,
+                                               180.0f
+                                              );
             break;
 
         case UserAction::Type::AdjustPGain:
             systemState.voltNetPGain = constrain(
-                                                   systemState.voltNetPGain + action.delta(),
-                                                   0.0f,
-                                                   999.999f
-                                                  );
+                                                 systemState.voltNetPGain + action.delta(),
+                                                 0.0f,
+                                                 999.999f
+                                                );
             break;
 
         case UserAction::Type::AdjustIGain:
             systemState.voltNetIGain = constrain(
-                                                   systemState.voltNetIGain + action.delta(),
-                                                   0.0f,
-                                                   999.999f
-                                                  );
+                                                 systemState.voltNetIGain + action.delta(),
+                                                 0.0f,
+                                                 999.999f
+                                                );
             break;
 
         case UserAction::Type::AdjustDGain:
             systemState.voltNetDGain = constrain(
-                                                   systemState.voltNetDGain + action.delta(),
-                                                   0.0f,
-                                                   999.999f
-                                                  );
+                                                 systemState.voltNetDGain + action.delta(),
+                                                 0.0f,
+                                                 999.999f
+                                                );
             break;
 
         case UserAction::Type::None:
@@ -144,6 +139,7 @@ void setup() {
                     CHANGE
                    );
     Serial.print("Encoder initialized!\n");
+    previousVoltageControlUs = micros();
     // Done
     Serial.print("Setup done!\n");
 }
@@ -163,10 +159,34 @@ void loop() {
 
     /* ######## Control Layer */
     // Voltage Control Net
-    // Proportional control
+    // PI control
+    const uint32_t nowUs          = micros();
+    const float    elapsedSeconds =
+            (nowUs - previousVoltageControlUs) / 1000000.0f;
+    previousVoltageControlUs = nowUs;
+
     systemState.vError1 = systemState.v1 - systemState.vSetPoint1;
-    systemState.vFBDutyCycle += systemState.vError1 * systemState.voltNetPGain * (PWM_MAX / 100);
-    systemState.vFBDutyCycle = constrain(systemState.vFBDutyCycle, 0, PWM_MAX);
+
+    const float proportionalDutyPercent =
+            systemState.vError1 * systemState.voltNetPGain;
+
+    voltageIntegralDutyPercent +=
+            systemState.vError1 *
+            systemState.voltNetIGain *
+            elapsedSeconds;
+    voltageIntegralDutyPercent = constrain(
+                                           voltageIntegralDutyPercent,
+                                           0.0f,
+                                           100.0f
+                                          );
+
+    const float dutyPercentDelta =
+            proportionalDutyPercent + voltageIntegralDutyPercent;
+    systemState.vFBDutyCycle = constrain(
+                                         dutyPercentDelta * (PWM_MAX / 100.0f),
+                                         0.0f,
+                                         static_cast<float>(PWM_MAX)
+                                        );
     analogWrite(VOLTAGE_FEEDBACK_NET_PIN_1, systemState.vFBDutyCycle);
 
 
