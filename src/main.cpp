@@ -10,6 +10,7 @@
 #include "UserAction.h"
 
 /* ######## Config */
+constexpr bool debugMode = false;
 // IO
 constexpr uint32_t SCREEN_UPDATE_RATE_MS = 50;
 constexpr uint32_t USB_OVER_UART_BAUD    = 9600;
@@ -63,9 +64,11 @@ void handleUserAction(const UserAction& action) {
     if (action.type() == UserAction::Type::None) {
         return;
     }
-    Serial.println("Handling user action...");
-    Serial.println("Action type: " + String(static_cast<int>(action.type())));
-    Serial.println("Action delta: " + String(action.delta()));
+    if (debugMode) {
+        Serial.println("Handling user action...");
+        Serial.println("Action type: " + String(static_cast<int>(action.type())));
+        Serial.println("Action delta: " + String(action.delta()));
+    }
     switch (action.type()) {
         case UserAction::Type::AdjustVoltageSetPoint:
             systemState.vSetPoint1 += action.delta();
