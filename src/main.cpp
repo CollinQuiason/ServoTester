@@ -58,6 +58,12 @@ constexpr int PWM_MAX    = (1 << PWM_RESOLUTION) - 1;
 
 
 void handleUserAction(const UserAction& action) {
+    if (action.type() == UserAction::Type::None) {
+        return;
+    }
+    Serial.println("Handling user action...");
+    Serial.println("Action type: " + String(static_cast<int>(action.type())));
+    Serial.println("Action delta: " + String(action.delta()));
     switch (action.type()) {
         case UserAction::Type::AdjustVoltageSetPoint:
             systemState.vSetPoint1 += action.delta();
@@ -71,6 +77,7 @@ void handleUserAction(const UserAction& action) {
         case UserAction::Type::AdjustDGain:
         case UserAction::Type::None:
             break;
+    Serial.println("User action handled!");
     }
 }
 

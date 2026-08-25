@@ -217,8 +217,8 @@ UserAction UserInterface::createUserAction(
 
     if (screen_ == Screen::Dashboard) {
         return UserAction::adjustVoltageSetPoint(
-                delta * VOLTAGE_SET_POINT_STEP
-                );
+                                                 delta * VOLTAGE_SET_POINT_STEP
+                                                );
     }
 
     if (screen_ == Screen::GainEditor) {
