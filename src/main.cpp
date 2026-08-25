@@ -7,6 +7,7 @@
 #include "SystemState.h"
 #include "UserInterface.h"
 #include "InputEvent.h"
+#include "UserAction.h"
 
 /* ######## Config */
 // IO
@@ -55,9 +56,22 @@ long selectedValue           = 0;
 float         vSetPoint1 = 0.0f;
 constexpr int PWM_MAX    = (1 << PWM_RESOLUTION) - 1;
 
-void handleInputEvent(InputEvent event) {
-    systemState.vSetPoint1 +=
-            static_cast<float>(event.encoderDelta) * 0.1f;
+
+void handleUserAction(const UserAction& action) {
+    switch (action.type()) {
+        case UserAction::Type::AdjustVoltageSetPoint:
+            systemState.vSetPoint1 += action.delta();
+            break;
+
+        // These actions are defined now, but their corresponding control
+        // behavior has not been implemented yet.
+        case UserAction::Type::AdjustServoAngle:
+        case UserAction::Type::AdjustPGain:
+        case UserAction::Type::AdjustIGain:
+        case UserAction::Type::AdjustDGain:
+        case UserAction::Type::None:
+            break;
+    }
 }
 
 
@@ -113,7 +127,7 @@ void loop() {
 
 
     /* ######## UI Update Layer */
-    handleInputEvent(ui.tick());
+    handleUserAction(ui.tick());
 
     /* ######## Tick Layer */
 }

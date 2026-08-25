@@ -5,6 +5,7 @@
 
 #include "InputEvent.h"
 #include "SystemState.h"
+#include "UserAction.h"
 
 
 class UserInterface {
@@ -15,7 +16,7 @@ class UserInterface {
                       uint8_t            encoderButtonPin);
 
         void       begin(); // Does not mutate SystemState.
-        InputEvent tick();
+        UserAction tick();
 
     private:
         enum class Screen : uint8_t {
@@ -53,6 +54,7 @@ class UserInterface {
 
         int        readEncoderDelta();
         InputEvent readInputEvent(uint32_t nowMs);
+        UserAction createUserAction(const InputEvent& inputEvent) const;
 
         bool containsLiveData(Screen screen) const;
         void openScreen(Screen screen);

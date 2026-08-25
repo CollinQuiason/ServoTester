@@ -7,6 +7,8 @@ namespace {
     constexpr uint32_t BUTTON_DEBOUNCE_MS         = 25;
     constexpr uint32_t BUTTON_LONG_PRESS_MS       = 700;
     constexpr uint32_t DISPLAY_UPDATE_INTERVAL_MS = 50;
+    constexpr float    VOLTAGE_SET_POINT_STEP     = 0.1f;
+    constexpr float    PID_GAIN_STEP              = 0.01f;
 
     constexpr uint8_t MENU_FIRST_ROW_Y  = 14;
     constexpr uint8_t MENU_ROW_HEIGHT   = 10;
@@ -76,11 +78,12 @@ void UserInterface::begin() {
 }
 
 
-InputEvent UserInterface::tick() {
+UserAction UserInterface::tick() {
     const uint32_t nowMs = millis();
 
     InputEvent inputEvent   = readInputEvent(nowMs);
     inputEvent.encoderDelta = readEncoderDelta();
+    UserAction userAction   = createUserAction(inputEvent);
 
     const bool displayUpdateAllowed =
             (displayDirty_ || containsLiveData(screen_)) &&
@@ -130,7 +133,7 @@ InputEvent UserInterface::tick() {
         displayDirty_        = false;
     }
 
-    return inputEvent;
+    return userAction;
 }
 
 
@@ -200,6 +203,38 @@ InputEvent UserInterface::readInputEvent(uint32_t nowMs) {
     inputEvent.encoderButtonDown = stableButtonPressed_;
 
     return inputEvent;
+}
+
+
+UserAction UserInterface::createUserAction(
+        const InputEvent& inputEvent
+        ) const {
+    if (inputEvent.encoderDelta == 0) {
+        return UserAction();
+    }
+
+    const float delta = static_cast<float>(inputEvent.encoderDelta);
+
+    if (screen_ == Screen::Dashboard) {
+        return UserAction::adjustVoltageSetPoint(
+                delta * VOLTAGE_SET_POINT_STEP
+                );
+    }
+
+    if (screen_ == Screen::GainEditor) {
+        switch (selectedGain_) {
+            case 0:
+                return UserAction::adjustPGain(delta * PID_GAIN_STEP);
+
+            case 1:
+                return UserAction::adjustIGain(delta * PID_GAIN_STEP);
+
+            case 2:
+                return UserAction::adjustDGain(delta * PID_GAIN_STEP);
+        }
+    }
+
+    return UserAction();
 }
 
 
