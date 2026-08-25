@@ -411,8 +411,6 @@ bool UserInterface::renderGainEditor(
         const InputEvent& inputEvent,
         bool              displayUpdateAllowed
         ) {
-    // The actual gain values do not exist in SystemState yet, so this screen
-    // keeps the editor placeholder without inventing another source of truth.
     if (inputEvent.encoderButtonLongPressed) {
         openScreen(Screen::PidMenu);
         return false;
@@ -423,8 +421,29 @@ bool UserInterface::renderGainEditor(
     }
 
     beginDisplayUpdate();
+
+    float gain = 0.0f;
+
+    switch (selectedGain_) {
+        case 0:
+            gain = systemState_->voltNetPGain;
+            break;
+
+        case 1:
+            gain = systemState_->voltNetIGain;
+            break;
+
+        case 2:
+            gain = systemState_->voltNetDGain;
+            break;
+    }
+
+    char line[22];
+    snprintf(line, sizeof(line), "Value: %8.2f", gain);
+
     ssd1306_printFixed(0, 0, PID_MENU_ITEMS[selectedGain_], STYLE_NORMAL);
-    ssd1306_printFixed(0, 20, "Digit editor next", STYLE_NORMAL);
+    ssd1306_printFixed(0, 20, line, STYLE_NORMAL);
+    ssd1306_printFixed(0, 32, "Turn: adjust 0.01", STYLE_NORMAL);
     ssd1306_printFixed(0, 48, "Hold: back", STYLE_NORMAL);
 
     return true;

@@ -6,4 +6,7 @@ struct SystemState {
     float vSetPoint1;
     float vFBDutyCycle;
     float vError1;
+    float voltNetPGain;
+    float voltNetIGain;
+    float voltNetDGain;
 };

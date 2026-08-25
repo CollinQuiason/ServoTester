@@ -24,9 +24,6 @@ constexpr uint8_t ENCODER_B                  = 14;
 constexpr uint8_t ENCODER_BUTTON             = 13;
 // Voltage PID Control Net
 constexpr float DIVIDER_RATIO = 16.0f;
-constexpr float voltNetPGain  = 0.05f; // Duty cycle %s per volt
-constexpr float voltNetIGain  = 1.0f;
-constexpr float voltNetDGain  = 1.0f;
 // Encoder
 constexpr uint32_t DEBOUNCE_MS      = 25;
 constexpr int8_t   EDGES_PER_DETENT = 4;
@@ -43,7 +40,11 @@ SystemState systemState = {
             .v1 = 0.0f,
             .v2 = 0.0f,
             .vSetPoint1 = 0.0f,
-            .vFBDutyCycle = 0.0f
+            .vFBDutyCycle = 0.0f,
+            .vError1 = 0.0f,
+            .voltNetPGain = 0.05f, // Duty cycle %s per volt
+            .voltNetIGain = 1.0f,
+            .voltNetDGain = 1.0f
         };
 UserInterface ui(
                  &systemState,
@@ -69,12 +70,21 @@ void handleUserAction(const UserAction& action) {
             systemState.vSetPoint1 += action.delta();
             break;
 
-        // These actions are defined now, but their corresponding control
-        // behavior has not been implemented yet.
         case UserAction::Type::AdjustServoAngle:
+            break;
+
         case UserAction::Type::AdjustPGain:
+            systemState.voltNetPGain += action.delta();
+            break;
+
         case UserAction::Type::AdjustIGain:
+            systemState.voltNetIGain += action.delta();
+            break;
+
         case UserAction::Type::AdjustDGain:
+            systemState.voltNetDGain += action.delta();
+            break;
+
         case UserAction::Type::None:
             break;
     Serial.println("User action handled!");
@@ -128,7 +138,7 @@ void loop() {
     // Voltage Control Net
     // Proportional control
     systemState.vError1 = systemState.v1 - systemState.vSetPoint1;
-    systemState.vFBDutyCycle += systemState.vError1 * voltNetPGain * (PWM_MAX / 100);
+    systemState.vFBDutyCycle += systemState.vError1 * systemState.voltNetPGain * (PWM_MAX / 100);
     systemState.vFBDutyCycle = constrain(systemState.vFBDutyCycle, 0, PWM_MAX);
     analogWrite(VOLTAGE_FEEDBACK_NET_PIN_1, systemState.vFBDutyCycle);
 
