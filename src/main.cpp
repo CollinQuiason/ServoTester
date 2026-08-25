@@ -74,15 +74,27 @@ void handleUserAction(const UserAction& action) {
             break;
 
         case UserAction::Type::AdjustPGain:
-            systemState.voltNetPGain += action.delta();
+            systemState.voltNetPGain = constrain(
+                                                   systemState.voltNetPGain + action.delta(),
+                                                   0.0f,
+                                                   999.999f
+                                                  );
             break;
 
         case UserAction::Type::AdjustIGain:
-            systemState.voltNetIGain += action.delta();
+            systemState.voltNetIGain = constrain(
+                                                   systemState.voltNetIGain + action.delta(),
+                                                   0.0f,
+                                                   999.999f
+                                                  );
             break;
 
         case UserAction::Type::AdjustDGain:
-            systemState.voltNetDGain += action.delta();
+            systemState.voltNetDGain = constrain(
+                                                   systemState.voltNetDGain + action.delta(),
+                                                   0.0f,
+                                                   999.999f
+                                                  );
             break;
 
         case UserAction::Type::None:

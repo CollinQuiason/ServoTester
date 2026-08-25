@@ -8,7 +8,18 @@ namespace {
     constexpr uint32_t BUTTON_LONG_PRESS_MS       = 700;
     constexpr uint32_t DISPLAY_UPDATE_INTERVAL_MS = 50;
     constexpr float    VOLTAGE_SET_POINT_STEP     = 0.1f;
-    constexpr float    PID_GAIN_STEP              = 0.01f;
+
+    constexpr float PID_GAIN_DIGIT_STEPS[] = {
+                100.0f,
+                 10.0f,
+                  1.0f,
+                  0.1f,
+                  0.01f,
+                  0.001f
+            };
+
+    constexpr uint8_t PID_GAIN_DIGIT_COUNT =
+            sizeof(PID_GAIN_DIGIT_STEPS) / sizeof(PID_GAIN_DIGIT_STEPS[0]);
 
     constexpr uint8_t MENU_FIRST_ROW_Y  = 14;
     constexpr uint8_t MENU_ROW_HEIGHT   = 10;
@@ -221,16 +232,23 @@ UserAction UserInterface::createUserAction(
                                                 );
     }
 
-    if (screen_ == Screen::GainEditor) {
+    if (
+        screen_ == Screen::GainEditor &&
+        editingGainDigit_ &&
+        !inputEvent.encoderButtonLongPressed
+    ) {
+        const float gainDelta =
+                delta * PID_GAIN_DIGIT_STEPS[selectedGainDigit_];
+
         switch (selectedGain_) {
             case 0:
-                return UserAction::adjustPGain(delta * PID_GAIN_STEP);
+                return UserAction::adjustPGain(gainDelta);
 
             case 1:
-                return UserAction::adjustIGain(delta * PID_GAIN_STEP);
+                return UserAction::adjustIGain(gainDelta);
 
             case 2:
-                return UserAction::adjustDGain(delta * PID_GAIN_STEP);
+                return UserAction::adjustDGain(gainDelta);
         }
     }
 
@@ -385,7 +403,9 @@ bool UserInterface::renderPidMenu(
     }
 
     if (inputEvent.encoderButtonClicked) {
-        selectedGain_ = selectedPidItem_;
+        selectedGain_      = selectedPidItem_;
+        selectedGainDigit_ = 4;
+        editingGainDigit_  = false;
         openScreen(Screen::GainEditor);
         return false;
     }
@@ -412,8 +432,27 @@ bool UserInterface::renderGainEditor(
         bool              displayUpdateAllowed
         ) {
     if (inputEvent.encoderButtonLongPressed) {
+        editingGainDigit_ = false;
         openScreen(Screen::PidMenu);
         return false;
+    }
+
+    if (inputEvent.encoderButtonClicked) {
+        editingGainDigit_ = !editingGainDigit_;
+        displayDirty_     = true;
+    }
+
+    if (inputEvent.encoderDelta != 0 && !editingGainDigit_) {
+        int nextDigit =
+                static_cast<int>(selectedGainDigit_) + inputEvent.encoderDelta;
+        nextDigit %= PID_GAIN_DIGIT_COUNT;
+
+        if (nextDigit < 0) {
+            nextDigit += PID_GAIN_DIGIT_COUNT;
+        }
+
+        selectedGainDigit_ = static_cast<uint8_t>(nextDigit);
+        displayDirty_      = true;
     }
 
     if (!displayUpdateAllowed) {
@@ -438,13 +477,35 @@ bool UserInterface::renderGainEditor(
             break;
     }
 
+    char gainText[8];
+    snprintf(gainText, sizeof(gainText), "%07.3f", gain);
+
     char line[22];
-    snprintf(line, sizeof(line), "Value: %8.2f", gain);
+    snprintf(line, sizeof(line), "Value: %s", gainText);
+
+    const uint8_t selectedDigitX = static_cast<uint8_t>(
+            42 +
+            (selectedGainDigit_ + (selectedGainDigit_ >= 3 ? 1 : 0)) * 6
+        );
 
     ssd1306_printFixed(0, 0, PID_MENU_ITEMS[selectedGain_], STYLE_NORMAL);
-    ssd1306_printFixed(0, 20, line, STYLE_NORMAL);
-    ssd1306_printFixed(0, 32, "Turn: adjust 0.01", STYLE_NORMAL);
-    ssd1306_printFixed(0, 48, "Hold: back", STYLE_NORMAL);
+    ssd1306_printFixed(0, 16, line, STYLE_NORMAL);
+    ssd1306_printFixed(selectedDigitX, 24, "^", STYLE_NORMAL);
+    ssd1306_printFixed(
+                       0,
+                       36,
+                       editingGainDigit_ ?
+                               "Turn: change digit" : "Turn: select digit",
+                       STYLE_NORMAL
+                      );
+    ssd1306_printFixed(
+                       0,
+                       44,
+                       editingGainDigit_ ?
+                               "Click: select digit" : "Click: edit digit",
+                       STYLE_NORMAL
+                      );
+    ssd1306_printFixed(0, 54, "Hold: back", STYLE_NORMAL);
 
     return true;
 }

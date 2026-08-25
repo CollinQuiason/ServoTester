@@ -47,7 +47,9 @@ class UserInterface {
         uint8_t selectedPidItem_     = 0;
         uint8_t pidMenuTopItem_      = 0;
         uint8_t selectedGain_        = 0;
+        uint8_t selectedGainDigit_   = 4;
         uint8_t selectedPlaceholder_ = 0;
+        bool    editingGainDigit_    = false;
 
         bool     displayDirty_        = true;
         uint32_t lastDisplayUpdateMs_ = 0;
