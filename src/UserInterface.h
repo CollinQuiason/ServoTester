@@ -24,6 +24,7 @@ class UserInterface {
             Dashboard,
             MainMenu,
             PidMenu,
+            ErrorGraph,
             GainEditor,
             Placeholder
         };
@@ -53,6 +54,10 @@ class UserInterface {
         uint8_t selectedPlaceholder_ = 0;
         bool    editingGainDigit_    = false;
 
+        float   errorGraphHistory_[128] = {};
+        uint8_t errorGraphStart_        = 0;
+        uint8_t errorGraphCount_        = 0;
+
         bool     displayDirty_        = true;
         uint32_t lastDisplayUpdateMs_ = 0;
 
@@ -81,6 +86,10 @@ class UserInterface {
                 bool              displayUpdateAllowed
                 );
         bool renderPidMenu(
+                const InputEvent& inputEvent,
+                bool              displayUpdateAllowed
+                );
+        bool renderErrorGraph(
                 const InputEvent& inputEvent,
                 bool              displayUpdateAllowed
                 );

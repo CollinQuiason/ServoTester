@@ -38,6 +38,7 @@ namespace {
             sizeof(MAIN_MENU_ITEMS) / sizeof(MAIN_MENU_ITEMS[0]);
 
     const char* const PID_MENU_ITEMS[] = {
+                "Error Graph",
                 "P Gain",
                 "I Gain",
                 "D Gain"
@@ -95,12 +96,26 @@ void IRAM_ATTR UserInterface::onEncoderInterrupt() {
     encoder_.tick();
 }
 
+
 UserAction UserInterface::tick() {
     const uint32_t nowMs = millis();
 
     InputEvent inputEvent   = readInputEvent(nowMs);
     inputEvent.encoderDelta = readEncoderDelta();
     UserAction userAction   = createUserAction(inputEvent);
+
+    if (screen_ == Screen::ErrorGraph) {
+        if (errorGraphCount_ < 128) {
+            const uint8_t index =
+                    (errorGraphStart_ + errorGraphCount_) % 128;
+            errorGraphHistory_[index] = systemState_->vError1;
+            ++errorGraphCount_;
+        }
+        else {
+            errorGraphHistory_[errorGraphStart_] = systemState_->vError1;
+            errorGraphStart_ = (errorGraphStart_ + 1) % 128;
+        }
+    }
 
     const bool displayUpdateAllowed =
             (displayDirty_ || containsLiveData(screen_)) &&
@@ -128,6 +143,13 @@ UserAction UserInterface::tick() {
                                            inputEvent,
                                            displayUpdateAllowed
                                           );
+            break;
+
+        case Screen::ErrorGraph:
+            displayUpdated = renderErrorGraph(
+                                                inputEvent,
+                                                displayUpdateAllowed
+                                               );
             break;
 
         case Screen::GainEditor:
@@ -427,7 +449,14 @@ bool UserInterface::renderPidMenu(
     }
 
     if (inputEvent.encoderButtonClicked) {
-        selectedGain_      = selectedPidItem_;
+        if (selectedPidItem_ == 0) {
+            errorGraphStart_ = 0;
+            errorGraphCount_ = 0;
+            openScreen(Screen::ErrorGraph);
+            return false;
+        }
+
+        selectedGain_      = selectedPidItem_ - 1;
         selectedGainDigit_ = 4;
         editingGainDigit_  = false;
         openScreen(Screen::GainEditor);
@@ -447,6 +476,68 @@ bool UserInterface::renderPidMenu(
                pidMenuTopItem_
               );
 
+    return true;
+}
+
+
+bool UserInterface::renderErrorGraph(
+        const InputEvent& inputEvent,
+        bool              displayUpdateAllowed
+        ) {
+    if (inputEvent.encoderButtonLongPressed) {
+        openScreen(Screen::PidMenu);
+        return false;
+    }
+
+    if (!displayUpdateAllowed) {
+        return false;
+    }
+
+    float maxAbsoluteError = 0.1f;
+
+    for (uint16_t i = 0; i < errorGraphCount_; ++i) {
+        const float error = errorGraphHistory_[
+                (errorGraphStart_ + i) % 128
+            ];
+        const float absoluteError = error < 0.0f ? -error : error;
+
+        if (absoluteError > maxAbsoluteError) {
+            maxAbsoluteError = absoluteError;
+        }
+    }
+
+    maxAbsoluteError *= 1.1f;
+
+    uint8_t graphBuffer[128 * 48 / 8] = {};
+
+    // Dashed zero-error line.
+    for (uint8_t x = 0; x < 128; x += 2) {
+        graphBuffer[(23 / 8) * 128 + x] |= 1 << (23 % 8);
+    }
+
+    int previousY = 23;
+
+    for (uint16_t i = 0; i < errorGraphCount_; ++i) {
+        const uint8_t x = static_cast<uint8_t>(
+                128 - errorGraphCount_ + i
+            );
+        const float error = errorGraphHistory_[
+                (errorGraphStart_ + i) % 128
+            ];
+        int y = static_cast<int>(23.0f - error / maxAbsoluteError * 22.0f);
+        y = constrain(y, 1, 45);
+
+        const int firstY = i == 0 || y < previousY ? y : previousY;
+        const int lastY  = i == 0 || y > previousY ? y : previousY;
+
+        for (int lineY = firstY; lineY <= lastY; ++lineY) {
+            graphBuffer[(lineY / 8) * 128 + x] |= 1 << (lineY % 8);
+        }
+
+        previousY = y;
+    }
+
+    ssd1306_drawBufferFast(0, 0, 128, 48, graphBuffer);
     return true;
 }
 
@@ -512,7 +603,7 @@ bool UserInterface::renderGainEditor(
             (selectedGainDigit_ + (selectedGainDigit_ >= 3 ? 1 : 0)) * 6
         );
 
-    ssd1306_printFixed(0, 0, PID_MENU_ITEMS[selectedGain_], STYLE_NORMAL);
+    ssd1306_printFixed(0, 0, PID_MENU_ITEMS[selectedGain_ + 1], STYLE_NORMAL);
     ssd1306_printFixed(66, 0, "Hold:back", STYLE_NORMAL);
     ssd1306_printFixed(0, 8, line, STYLE_NORMAL);
     ssd1306_printFixed(selectedDigitX, 16, "^", STYLE_NORMAL);
