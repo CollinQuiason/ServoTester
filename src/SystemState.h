@@ -9,4 +9,5 @@ struct SystemState {
     float voltNetPGain;
     float voltNetIGain;
     float voltNetDGain;
+    float servoAngle;
 };

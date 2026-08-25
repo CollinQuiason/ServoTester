@@ -8,6 +8,7 @@ namespace {
     constexpr uint32_t BUTTON_LONG_PRESS_MS       = 700;
     constexpr uint32_t DISPLAY_UPDATE_INTERVAL_MS = 50;
     constexpr float    VOLTAGE_SET_POINT_STEP     = 0.1f;
+    constexpr float    SERVO_ANGLE_STEP           = 1.0f;
 
     constexpr float PID_GAIN_DIGIT_STEPS[] = {
                 100.0f,
@@ -21,8 +22,8 @@ namespace {
     constexpr uint8_t PID_GAIN_DIGIT_COUNT =
             sizeof(PID_GAIN_DIGIT_STEPS) / sizeof(PID_GAIN_DIGIT_STEPS[0]);
 
-    constexpr uint8_t MENU_FIRST_ROW_Y  = 14;
-    constexpr uint8_t MENU_ROW_HEIGHT   = 10;
+    constexpr uint8_t MENU_FIRST_ROW_Y  = 8;
+    constexpr uint8_t MENU_ROW_HEIGHT   = 8;
     constexpr uint8_t MENU_VISIBLE_ROWS = 5;
 
     const char* const MAIN_MENU_ITEMS[] = {
@@ -83,6 +84,7 @@ void UserInterface::begin() {
     // display-update interval.
     const uint32_t nowMs = millis();
     if (renderDashboard(InputEvent(), true)) {
+        renderStatusBar();
         lastDisplayUpdateMs_ = nowMs;
         displayDirty_        = false;
     }
@@ -140,6 +142,7 @@ UserAction UserInterface::tick() {
     }
 
     if (displayUpdated) {
+        renderStatusBar();
         lastDisplayUpdateMs_ = nowMs;
         displayDirty_        = false;
     }
@@ -227,9 +230,13 @@ UserAction UserInterface::createUserAction(
     const float delta = static_cast<float>(inputEvent.encoderDelta);
 
     if (screen_ == Screen::Dashboard) {
-        return UserAction::adjustVoltageSetPoint(
-                                                 delta * VOLTAGE_SET_POINT_STEP
-                                                );
+        if (selectedDashboardColumn_ == 0) {
+            return UserAction::adjustVoltageSetPoint(
+                                                     delta * VOLTAGE_SET_POINT_STEP
+                                                    );
+        }
+
+        return UserAction::adjustServoAngle(delta * SERVO_ANGLE_STEP);
     }
 
     if (
@@ -256,10 +263,8 @@ UserAction UserInterface::createUserAction(
 }
 
 
-bool UserInterface::containsLiveData(Screen screen) const {
-    return screen == Screen::Dashboard ||
-            screen == Screen::PidMenu ||
-            screen == Screen::GainEditor;
+bool UserInterface::containsLiveData(Screen) const {
+    return true;
 }
 
 
@@ -306,30 +311,45 @@ bool UserInterface::renderDashboard(
         return false;
     }
 
+    if (inputEvent.encoderButtonClicked) {
+        selectedDashboardColumn_ = selectedDashboardColumn_ == 0 ? 1 : 0;
+        displayDirty_            = true;
+    }
+
     if (!displayUpdateAllowed) {
         return false;
     }
 
     beginDisplayUpdate();
 
-    char line[22];
+    char line[11];
 
-    snprintf(line, sizeof(line), "V1:   %7.3f V", systemState_->v1);
+    if (selectedDashboardColumn_ == 0) {
+        ssd1306_fillRect(0, 0, 60, 5);
+    }
+    else {
+        ssd1306_fillRect(66, 0, 127, 5);
+    }
+
+    // Voltage column
+    snprintf(line, sizeof(line), "VLT %5.2fV", systemState_->v1);
     ssd1306_printFixed(0, 8, line, STYLE_NORMAL);
 
-    snprintf(line, sizeof(line), "V2:   %7.3f V", systemState_->v2);
+    snprintf(line, sizeof(line), "LGV %5.2fV", systemState_->v2);
     ssd1306_printFixed(0, 16, line, STYLE_NORMAL);
 
-    snprintf(line, sizeof(line), "Set:  %7.2f V", systemState_->vSetPoint1);
+    snprintf(line, sizeof(line), "DTY %6.0f", systemState_->vFBDutyCycle);
     ssd1306_printFixed(0, 24, line, STYLE_NORMAL);
 
-    snprintf(line, sizeof(line), "Duty: %9.1f", systemState_->vFBDutyCycle);
+    snprintf(line, sizeof(line), "GAT %6s", "ON");
     ssd1306_printFixed(0, 32, line, STYLE_NORMAL);
 
-    snprintf(line, sizeof(line), "Err:  %7.3f V", systemState_->vError1);
-    ssd1306_printFixed(0, 40, line, STYLE_NORMAL);
+    // Output column
+    snprintf(line, sizeof(line), "DEG %6.0f", systemState_->servoAngle);
+    ssd1306_printFixed(66, 8, line, STYLE_NORMAL);
 
-    ssd1306_printFixed(0, 54, "Hold: menu", STYLE_NORMAL);
+    snprintf(line, sizeof(line), "PWM %6s", "----us");
+    ssd1306_printFixed(66, 16, line, STYLE_NORMAL);
 
     return true;
 }
@@ -489,24 +509,23 @@ bool UserInterface::renderGainEditor(
         );
 
     ssd1306_printFixed(0, 0, PID_MENU_ITEMS[selectedGain_], STYLE_NORMAL);
-    ssd1306_printFixed(0, 16, line, STYLE_NORMAL);
-    ssd1306_printFixed(selectedDigitX, 24, "^", STYLE_NORMAL);
+    ssd1306_printFixed(66, 0, "Hold:back", STYLE_NORMAL);
+    ssd1306_printFixed(0, 8, line, STYLE_NORMAL);
+    ssd1306_printFixed(selectedDigitX, 16, "^", STYLE_NORMAL);
     ssd1306_printFixed(
                        0,
-                       36,
+                       28,
                        editingGainDigit_ ?
                                "Turn: change digit" : "Turn: select digit",
                        STYLE_NORMAL
                       );
     ssd1306_printFixed(
                        0,
-                       44,
+                       36,
                        editingGainDigit_ ?
                                "Click: select digit" : "Click: edit digit",
                        STYLE_NORMAL
                       );
-    ssd1306_printFixed(0, 54, "Hold: back", STYLE_NORMAL);
-
     return true;
 }
 
@@ -532,7 +551,7 @@ bool UserInterface::renderPlaceholder(
                        STYLE_NORMAL
                       );
     ssd1306_printFixed(0, 20, "Not implemented", STYLE_NORMAL);
-    ssd1306_printFixed(0, 48, "Hold: back", STYLE_NORMAL);
+    ssd1306_printFixed(0, 40, "Hold: back", STYLE_NORMAL);
 
     return true;
 }
@@ -542,6 +561,35 @@ void UserInterface::beginDisplayUpdate() {
     if (displayDirty_) {
         ssd1306_clearScreen();
     }
+}
+
+
+void UserInterface::renderStatusBar() const {
+    char line[12];
+
+    // Voltage column
+    snprintf(
+             line,
+             sizeof(line),
+             "SET %5.2fV",
+             systemState_->vSetPoint1
+            );
+    ssd1306_printFixed(0, 48, line, STYLE_NORMAL);
+
+    snprintf(line, sizeof(line), "ERR %6.3f", systemState_->vError1);
+    ssd1306_printFixed(0, 56, line, STYLE_NORMAL);
+
+    // Output column
+    snprintf(
+             line,
+             sizeof(line),
+             "DEG %6.0f",
+             systemState_->servoAngle
+            );
+    ssd1306_printFixed(66, 48, line, STYLE_NORMAL);
+
+    snprintf(line, sizeof(line), "PWM %6s", "----us");
+    ssd1306_printFixed(66, 56, line, STYLE_NORMAL);
 }
 
 

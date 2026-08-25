@@ -44,7 +44,8 @@ SystemState systemState = {
             .vError1 = 0.0f,
             .voltNetPGain = 0.05f, // Duty cycle %s per volt
             .voltNetIGain = 1.0f,
-            .voltNetDGain = 1.0f
+            .voltNetDGain = 1.0f,
+            .servoAngle = 90.0f
         };
 UserInterface ui(
                  &systemState,
@@ -71,6 +72,11 @@ void handleUserAction(const UserAction& action) {
             break;
 
         case UserAction::Type::AdjustServoAngle:
+            systemState.servoAngle = constrain(
+                                                  systemState.servoAngle + action.delta(),
+                                                  0.0f,
+                                                  180.0f
+                                                 );
             break;
 
         case UserAction::Type::AdjustPGain:

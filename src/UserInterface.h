@@ -42,7 +42,8 @@ class UserInterface {
         uint32_t rawButtonChangedAtMs_     = 0;
         uint32_t buttonPressedAtMs_        = 0;
 
-        uint8_t selectedMainItem_    = 0;
+        uint8_t selectedDashboardColumn_ = 0;
+        uint8_t selectedMainItem_         = 0;
         uint8_t mainMenuTopItem_     = 0;
         uint8_t selectedPidItem_     = 0;
         uint8_t pidMenuTopItem_      = 0;
@@ -92,6 +93,7 @@ class UserInterface {
                 );
 
         void beginDisplayUpdate();
+        void renderStatusBar() const;
 
         static void renderMenu(
                 const char*        title,
