@@ -2,6 +2,7 @@
 
 #include "ssd1306.h"
 
+
 namespace {
     constexpr uint32_t BUTTON_DEBOUNCE_MS         = 25;
     constexpr uint32_t BUTTON_LONG_PRESS_MS       = 700;
@@ -32,11 +33,12 @@ namespace {
             sizeof(PID_MENU_ITEMS) / sizeof(PID_MENU_ITEMS[0]);
 }
 
+
 UserInterface::UserInterface(
         const SystemState* systemState,
-        const uint8_t      encoderPinA,
-        const uint8_t      encoderPinB,
-        const uint8_t      encoderButtonPin
+        uint8_t            encoderPinA,
+        uint8_t            encoderPinB,
+        uint8_t            encoderButtonPin
         )
     : systemState_(systemState),
       encoder_(
@@ -46,6 +48,7 @@ UserInterface::UserInterface(
               ),
       buttonPin_(encoderButtonPin) {
 }
+
 
 void UserInterface::begin() {
     pinMode(buttonPin_, INPUT_PULLUP);
@@ -62,31 +65,74 @@ void UserInterface::begin() {
     ssd1306_flipHorizontal(true);
     ssd1306_flipVertical(true);
     ssd1306_setFixedFont(ssd1306xled_font6x8);
-    ssd1306_clearScreen();
 
-    displayDirty_ = true;
-    updateDisplay(millis());
-}
-
-bool UserInterface::containsLiveData(Screen screen) {
-    return screen_ == Screen::Dashboard ||
-            screen_ == Screen::PidMenu ||
-            screen_ == Screen::GainEditor;
+    // The first frame is drawn immediately instead of waiting for the normal
+    // display-update interval.
+    const uint32_t nowMs = millis();
+    if (renderDashboard(InputEvent(), true)) {
+        lastDisplayUpdateMs_ = nowMs;
+        displayDirty_        = false;
+    }
 }
 
 
 InputEvent UserInterface::tick() {
-    const uint32_t   nowMs        = millis();
-    const int        encoderDelta = readEncoderDelta();
-    const inputEvent inputEvent   = readInputEvent(nowMs);
+    const uint32_t nowMs = millis();
 
-    if (encoderDelta != 0 || inputEvent != ButtonEvent::None) {
-        handleInput(encoderDelta, inputEvent);
+    InputEvent inputEvent   = readInputEvent(nowMs);
+    inputEvent.encoderDelta = readEncoderDelta();
+
+    const bool displayUpdateAllowed =
+            (displayDirty_ || containsLiveData(screen_)) &&
+            nowMs - lastDisplayUpdateMs_ >= DISPLAY_UPDATE_INTERVAL_MS;
+
+    bool displayUpdated = false;
+
+    switch (screen_) {
+        case Screen::Dashboard:
+            displayUpdated = renderDashboard(
+                                             inputEvent,
+                                             displayUpdateAllowed
+                                            );
+            break;
+
+        case Screen::MainMenu:
+            displayUpdated = renderMainMenu(
+                                            inputEvent,
+                                            displayUpdateAllowed
+                                           );
+            break;
+
+        case Screen::PidMenu:
+            displayUpdated = renderPidMenu(
+                                           inputEvent,
+                                           displayUpdateAllowed
+                                          );
+            break;
+
+        case Screen::GainEditor:
+            displayUpdated = renderGainEditor(
+                                              inputEvent,
+                                              displayUpdateAllowed
+                                             );
+            break;
+
+        case Screen::Placeholder:
+            displayUpdated = renderPlaceholder(
+                                               inputEvent,
+                                               displayUpdateAllowed
+                                              );
+            break;
     }
 
-    updateDisplay(nowMs);
-    return
+    if (displayUpdated) {
+        lastDisplayUpdateMs_ = nowMs;
+        displayDirty_        = false;
+    }
+
+    return inputEvent;
 }
+
 
 int UserInterface::readEncoderDelta() {
     encoder_.tick();
@@ -111,7 +157,10 @@ int UserInterface::readEncoderDelta() {
     return static_cast<int>(delta);
 }
 
+
 InputEvent UserInterface::readInputEvent(uint32_t nowMs) {
+    InputEvent inputEvent;
+
     const bool rawButtonPressed = digitalRead(buttonPin_) == LOW;
 
     if (rawButtonPressed != previousRawButtonPressed_) {
@@ -126,13 +175,16 @@ InputEvent UserInterface::readInputEvent(uint32_t nowMs) {
         stableButtonPressed_ = rawButtonPressed;
 
         if (stableButtonPressed_) {
-            buttonPressedAtMs_ = nowMs;
-            longPressReported_ = false;
+            buttonPressedAtMs_              = nowMs;
+            longPressReported_              = false;
+            inputEvent.encoderButtonPressed = true;
         }
-        else if (!longPressReported_) {
-            InputEvent event;
-            event.encoderButtonClicked = true;
-            return event;
+        else {
+            inputEvent.encoderButtonReleased = true;
+
+            if (!longPressReported_) {
+                inputEvent.encoderButtonClicked = true;
+            }
         }
     }
 
@@ -141,120 +193,28 @@ InputEvent UserInterface::readInputEvent(uint32_t nowMs) {
         !longPressReported_ &&
         nowMs - buttonPressedAtMs_ >= BUTTON_LONG_PRESS_MS
     ) {
-        longPressReported_ = true;
-        return InputEvent().withEncoderButtonLongPressed();
+        longPressReported_                  = true;
+        inputEvent.encoderButtonLongPressed = true;
     }
 
-    return InputEvent();
+    inputEvent.encoderButtonDown = stableButtonPressed_;
+
+    return inputEvent;
 }
 
-void UserInterface::handleInput(
-        int         encoderDelta,
-        ButtonEvent buttonEvent
-        ) {
-    switch (screen_) {
-        case Screen::Dashboard:
-            handleDashboard(buttonEvent);
-            break;
 
-        case Screen::MainMenu:
-            handleMainMenu(encoderDelta, buttonEvent);
-            break;
-
-        case Screen::PidMenu:
-            handlePidMenu(encoderDelta, buttonEvent);
-            break;
-
-        case Screen::GainEditor:
-            handleGainEditor(buttonEvent);
-            break;
-
-        case Screen::Placeholder:
-            handlePlaceholder(buttonEvent);
-            break;
-    }
+bool UserInterface::containsLiveData(Screen screen) const {
+    return screen == Screen::Dashboard ||
+            screen == Screen::PidMenu ||
+            screen == Screen::GainEditor;
 }
 
-void UserInterface::handleDashboard(ButtonEvent buttonEvent) {
-    if (buttonEvent == ButtonEvent::LongPress) {
-        openScreen(Screen::MainMenu);
-    }
-}
-
-void UserInterface::handleMainMenu(
-        int         encoderDelta,
-        ButtonEvent buttonEvent
-        ) {
-    if (encoderDelta != 0) {
-        moveSelection(
-                      encoderDelta,
-                      MAIN_MENU_ITEM_COUNT,
-                      selectedMainItem_,
-                      mainMenuTopItem_
-                     );
-        displayDirty_ = true;
-    }
-
-    if (buttonEvent == ButtonEvent::LongPress) {
-        openScreen(Screen::Dashboard);
-        return;
-    }
-
-    if (buttonEvent != ButtonEvent::Click) {
-        return;
-    }
-
-    if (selectedMainItem_ == 0) {
-        openScreen(Screen::PidMenu);
-        return;
-    }
-
-    selectedPlaceholder_ = selectedMainItem_;
-    openScreen(Screen::Placeholder);
-}
-
-void UserInterface::handlePidMenu(
-        int         encoderDelta,
-        ButtonEvent buttonEvent
-        ) {
-    if (encoderDelta != 0) {
-        moveSelection(
-                      encoderDelta,
-                      PID_MENU_ITEM_COUNT,
-                      selectedPidItem_,
-                      pidMenuTopItem_
-                     );
-        displayDirty_ = true;
-    }
-
-    if (buttonEvent == ButtonEvent::LongPress) {
-        openScreen(Screen::MainMenu);
-        return;
-    }
-
-    if (buttonEvent == ButtonEvent::Click) {
-        selectedGain_ = selectedPidItem_;
-        openScreen(Screen::GainEditor);
-    }
-}
-
-void UserInterface::handleGainEditor(ButtonEvent buttonEvent) {
-    // The live digit editor will be added here next.
-    if (buttonEvent == ButtonEvent::LongPress) {
-        openScreen(Screen::PidMenu);
-    }
-}
-
-void UserInterface::handlePlaceholder(ButtonEvent buttonEvent) {
-    if (buttonEvent == ButtonEvent::LongPress) {
-        openScreen(Screen::MainMenu);
-    }
-}
 
 void UserInterface::openScreen(Screen screen) {
     screen_       = screen;
     displayDirty_ = true;
 }
+
 
 void UserInterface::moveSelection(
         int      encoderDelta,
@@ -267,7 +227,6 @@ void UserInterface::moveSelection(
     }
 
     int nextItem = static_cast<int>(selectedItem) + encoderDelta;
-
     nextItem %= itemCount;
 
     if (nextItem < 0) {
@@ -284,67 +243,81 @@ void UserInterface::moveSelection(
     }
 }
 
-void UserInterface::updateDisplay(uint32_t nowMs) {
-    if (!displayDirty_ && !containsLiveData(screen_)) {
-        return;
+
+bool UserInterface::renderDashboard(
+        const InputEvent& inputEvent,
+        bool              displayUpdateAllowed
+        ) {
+    if (inputEvent.encoderButtonLongPressed) {
+        openScreen(Screen::MainMenu);
+        return false;
     }
-    if (displayDirty_) {
-        ssd1306_clearScreen();
-    }
-    if (nowMs - lastDisplayUpdateMs_ < DISPLAY_UPDATE_INTERVAL_MS) {
-        return;
+
+    if (!displayUpdateAllowed) {
+        return false;
     }
 
-    lastDisplayUpdateMs_ = nowMs;
-    displayDirty_        = false;
-    switch (screen_) {
-        case Screen::Dashboard:
-            renderDashboard();
-            break;
+    beginDisplayUpdate();
 
-        case Screen::MainMenu:
-            renderMainMenu();
-            break;
+    char line[22];
 
-        case Screen::PidMenu:
-            renderPidMenu();
-            break;
+    snprintf(line, sizeof(line), "V1:   %7.3f V", systemState_->v1);
+    ssd1306_printFixed(0, 8, line, STYLE_NORMAL);
 
-        case Screen::GainEditor:
-            renderGainEditor();
-            break;
+    snprintf(line, sizeof(line), "V2:   %7.3f V", systemState_->v2);
+    ssd1306_printFixed(0, 16, line, STYLE_NORMAL);
 
-        case Screen::Placeholder:
-            renderPlaceholder();
-            break;
-    }
+    snprintf(line, sizeof(line), "Set:  %7.2f V", systemState_->vSetPoint1);
+    ssd1306_printFixed(0, 24, line, STYLE_NORMAL);
+
+    snprintf(line, sizeof(line), "Duty: %9.1f", systemState_->vFBDutyCycle);
+    ssd1306_printFixed(0, 32, line, STYLE_NORMAL);
+
+    snprintf(line, sizeof(line), "Err:  %7.3f V", systemState_->vError1);
+    ssd1306_printFixed(0, 40, line, STYLE_NORMAL);
+
+    ssd1306_printFixed(0, 54, "Hold: menu", STYLE_NORMAL);
+
+    return true;
 }
 
-void UserInterface::renderDashboard() {
-    // Formatting
-    // LM2596 Buck voltage sens
-    char v1CharP[10];
-    char v2CharP[10];
-    snprintf(v1CharP, sizeof(v1CharP), "%.3f", this->systemState_->v1);
-    snprintf(v2CharP, sizeof(v2CharP), "%.3f", systemState_->v2); // See if the difference makes a difference
-    // Encoder
-    char vSetPointCharP[10];
-    char vFBDutyCycleCharP[10];
-    snprintf(vSetPointCharP, sizeof(vSetPointCharP), "%.2f", (float)encoder_.getPosition() * 0.1f);
-    snprintf(vFBDutyCycleCharP, sizeof(vFBDutyCycleCharP), "%f", this->systemState_->vFBDutyCycle);
-    // Output
-    // LM2596 Buck voltage sens
-    ssd1306_printFixed(0, 8, v1CharP, STYLE_NORMAL);
-    ssd1306_printFixed(0, 16, v2CharP, STYLE_NORMAL);
-    // Encoder
-    ssd1306_printFixed(0, 24, vSetPointCharP, STYLE_NORMAL);
-    ssd1306_printFixed(0, 32, vFBDutyCycleCharP, STYLE_NORMAL);
 
-    ssd1306_printFixed(0, 40, readInputEvent(millis()) == ButtonEvent::LongPress ? "Pressed!" : "        ",
-                       STYLE_NORMAL);
-}
+bool UserInterface::renderMainMenu(
+        const InputEvent& inputEvent,
+        bool              displayUpdateAllowed
+        ) {
+    if (inputEvent.encoderDelta != 0) {
+        moveSelection(
+                      inputEvent.encoderDelta,
+                      MAIN_MENU_ITEM_COUNT,
+                      selectedMainItem_,
+                      mainMenuTopItem_
+                     );
+        displayDirty_ = true;
+    }
 
-void UserInterface::renderMainMenu() {
+    if (inputEvent.encoderButtonLongPressed) {
+        openScreen(Screen::Dashboard);
+        return false;
+    }
+
+    if (inputEvent.encoderButtonClicked) {
+        if (selectedMainItem_ == 0) {
+            openScreen(Screen::PidMenu);
+        }
+        else {
+            selectedPlaceholder_ = selectedMainItem_;
+            openScreen(Screen::Placeholder);
+        }
+
+        return false;
+    }
+
+    if (!displayUpdateAllowed) {
+        return false;
+    }
+
+    beginDisplayUpdate();
     renderMenu(
                "MAIN MENU",
                MAIN_MENU_ITEMS,
@@ -352,9 +325,41 @@ void UserInterface::renderMainMenu() {
                selectedMainItem_,
                mainMenuTopItem_
               );
+
+    return true;
 }
 
-void UserInterface::renderPidMenu() {
+
+bool UserInterface::renderPidMenu(
+        const InputEvent& inputEvent,
+        bool              displayUpdateAllowed
+        ) {
+    if (inputEvent.encoderDelta != 0) {
+        moveSelection(
+                      inputEvent.encoderDelta,
+                      PID_MENU_ITEM_COUNT,
+                      selectedPidItem_,
+                      pidMenuTopItem_
+                     );
+        displayDirty_ = true;
+    }
+
+    if (inputEvent.encoderButtonLongPressed) {
+        openScreen(Screen::MainMenu);
+        return false;
+    }
+
+    if (inputEvent.encoderButtonClicked) {
+        selectedGain_ = selectedPidItem_;
+        openScreen(Screen::GainEditor);
+        return false;
+    }
+
+    if (!displayUpdateAllowed) {
+        return false;
+    }
+
+    beginDisplayUpdate();
     renderMenu(
                "PID TUNING",
                PID_MENU_ITEMS,
@@ -362,15 +367,49 @@ void UserInterface::renderPidMenu() {
                selectedPidItem_,
                pidMenuTopItem_
               );
+
+    return true;
 }
 
-void UserInterface::renderGainEditor() {
+
+bool UserInterface::renderGainEditor(
+        const InputEvent& inputEvent,
+        bool              displayUpdateAllowed
+        ) {
+    // The actual gain values do not exist in SystemState yet, so this screen
+    // keeps the editor placeholder without inventing another source of truth.
+    if (inputEvent.encoderButtonLongPressed) {
+        openScreen(Screen::PidMenu);
+        return false;
+    }
+
+    if (!displayUpdateAllowed) {
+        return false;
+    }
+
+    beginDisplayUpdate();
     ssd1306_printFixed(0, 0, PID_MENU_ITEMS[selectedGain_], STYLE_NORMAL);
     ssd1306_printFixed(0, 20, "Digit editor next", STYLE_NORMAL);
     ssd1306_printFixed(0, 48, "Hold: back", STYLE_NORMAL);
+
+    return true;
 }
 
-void UserInterface::renderPlaceholder() {
+
+bool UserInterface::renderPlaceholder(
+        const InputEvent& inputEvent,
+        bool              displayUpdateAllowed
+        ) {
+    if (inputEvent.encoderButtonLongPressed) {
+        openScreen(Screen::MainMenu);
+        return false;
+    }
+
+    if (!displayUpdateAllowed) {
+        return false;
+    }
+
+    beginDisplayUpdate();
     ssd1306_printFixed(
                        0,
                        0,
@@ -379,7 +418,17 @@ void UserInterface::renderPlaceholder() {
                       );
     ssd1306_printFixed(0, 20, "Not implemented", STYLE_NORMAL);
     ssd1306_printFixed(0, 48, "Hold: back", STYLE_NORMAL);
+
+    return true;
 }
+
+
+void UserInterface::beginDisplayUpdate() {
+    if (displayDirty_) {
+        ssd1306_clearScreen();
+    }
+}
+
 
 void UserInterface::renderMenu(
         const char*        title,
@@ -401,14 +450,16 @@ void UserInterface::renderMenu(
         snprintf(
                  line,
                  sizeof(line),
-                 "%c %s",
+                 "%-1c %-18s",
                  itemIndex == selectedItem ? '>' : ' ',
                  items[itemIndex]
                 );
 
         ssd1306_printFixed(
                            0,
-                           MENU_FIRST_ROW_Y + row * MENU_ROW_HEIGHT,
+                           static_cast<uint8_t>(
+                               MENU_FIRST_ROW_Y + row * MENU_ROW_HEIGHT
+                           ),
                            line,
                            STYLE_NORMAL
                           );

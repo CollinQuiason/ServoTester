@@ -56,7 +56,8 @@ float         vSetPoint1 = 0.0f;
 constexpr int PWM_MAX    = (1 << PWM_RESOLUTION) - 1;
 
 void handleInputEvent(InputEvent event) {
-    //TODO:
+    systemState.vSetPoint1 +=
+            static_cast<float>(event.encoderDelta) * 0.1f;
 }
 
 
@@ -91,9 +92,6 @@ void setup() {
 
 void loop() {
     /* ######## Tick Layer */
-    // Encoder
-    encoder.tick();
-    long encoderPosition = encoder.getPosition();
 
     /* ######## Peripheral Measurement Layer */
     // LM2596 Buck voltage sens
@@ -102,14 +100,13 @@ void loop() {
 
     /* ######## Compute Layer */
     // Voltage Control Net PID
-    systemState.v1         = rawMV1 * DIVIDER_RATIO / 1000.0f;
-    systemState.v2         = rawMV2 * DIVIDER_RATIO / 1000.0f;
-    systemState.vSetPoint1 = (float)encoderPosition * 0.1f; // 0.1V per encoder position
+    systemState.v1 = rawMV1 * DIVIDER_RATIO / 1000.0f;
+    systemState.v2 = rawMV2 * DIVIDER_RATIO / 1000.0f;
 
     /* ######## Control Layer */
     // Voltage Control Net
     // Proportional control
-    systemState.vError1 = systemState.v1 - vSetPoint1;
+    systemState.vError1 = systemState.v1 - systemState.vSetPoint1;
     systemState.vFBDutyCycle += systemState.vError1 * voltNetPGain * (PWM_MAX / 100);
     systemState.vFBDutyCycle = constrain(systemState.vFBDutyCycle, 0, PWM_MAX);
     analogWrite(VOLTAGE_FEEDBACK_NET_PIN_1, systemState.vFBDutyCycle);

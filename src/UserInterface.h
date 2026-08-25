@@ -2,23 +2,22 @@
 
 #include <Arduino.h>
 #include <RotaryEncoder.h>
-#include "SystemState.h"
+
 #include "InputEvent.h"
+#include "SystemState.h"
 
 
 class UserInterface {
     public:
         UserInterface(const SystemState* systemState,
-                      const uint8_t      encoderPinA,
-                      const uint8_t      encoderPinB,
-                      const uint8_t      encoderButtonPin);
+                      uint8_t            encoderPinA,
+                      uint8_t            encoderPinB,
+                      uint8_t            encoderButtonPin);
 
-        void begin(); // No mutation inside of UI
+        void       begin(); // Does not mutate SystemState.
         InputEvent tick();
 
     private:
-        const SystemState* systemState_;
-
         enum class Screen : uint8_t {
             Dashboard,
             MainMenu,
@@ -27,11 +26,7 @@ class UserInterface {
             Placeholder
         };
 
-        enum class ButtonEvent : uint8_t {
-            None,
-            Click,
-            LongPress
-        };
+        const SystemState* systemState_;
 
         RotaryEncoder encoder_;
         const uint8_t buttonPin_;
@@ -56,17 +51,10 @@ class UserInterface {
         bool     displayDirty_        = true;
         uint32_t lastDisplayUpdateMs_ = 0;
 
-        int         readEncoderDelta();
+        int        readEncoderDelta();
         InputEvent readInputEvent(uint32_t nowMs);
 
-        bool containsLiveData(Screen screen);
-        void handleInput(int encoderDelta, ButtonEvent buttonEvent);
-        void handleDashboard(ButtonEvent buttonEvent);
-        void handleMainMenu(int encoderDelta, ButtonEvent buttonEvent);
-        void handlePidMenu(int encoderDelta, ButtonEvent buttonEvent);
-        void handleGainEditor(ButtonEvent buttonEvent);
-        void handlePlaceholder(ButtonEvent buttonEvent);
-
+        bool containsLiveData(Screen screen) const;
         void openScreen(Screen screen);
 
         static void moveSelection(
@@ -76,12 +64,30 @@ class UserInterface {
                 uint8_t& topItem
                 );
 
-        void updateDisplay(uint32_t nowMs);
-        void renderDashboard();
-        void renderMainMenu();
-        void renderPidMenu();
-        void renderGainEditor();
-        void renderPlaceholder();
+        // Each screen receives input every tick. The boolean only controls
+        // whether OLED drawing is allowed during that tick.
+        bool renderDashboard(
+                const InputEvent& inputEvent,
+                bool              displayUpdateAllowed
+                );
+        bool renderMainMenu(
+                const InputEvent& inputEvent,
+                bool              displayUpdateAllowed
+                );
+        bool renderPidMenu(
+                const InputEvent& inputEvent,
+                bool              displayUpdateAllowed
+                );
+        bool renderGainEditor(
+                const InputEvent& inputEvent,
+                bool              displayUpdateAllowed
+                );
+        bool renderPlaceholder(
+                const InputEvent& inputEvent,
+                bool              displayUpdateAllowed
+                );
+
+        void beginDisplayUpdate();
 
         static void renderMenu(
                 const char*        title,
