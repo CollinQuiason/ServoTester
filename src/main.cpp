@@ -23,7 +23,9 @@ constexpr uint8_t ENCODER_A                  = 27;
 constexpr uint8_t ENCODER_B                  = 14;
 constexpr uint8_t ENCODER_BUTTON             = 13;
 // Voltage PID Control Net
-constexpr float DIVIDER_RATIO = 16.0f;
+constexpr float DIVIDER_RATIO                 = 16.0f;
+constexpr float VOLTAGE_DUTY_BIAS_PERCENT     = 100.0f;
+constexpr float VOLTAGE_D_FILTER_TIME_SECONDS = 0.01f;
 // Encoder
 constexpr uint32_t DEBOUNCE_MS      = 25;
 constexpr int8_t   EDGES_PER_DETENT = 4;
@@ -36,9 +38,9 @@ SystemState systemState = {
             .vSetPoint1 = 0.0f,
             .vFBDutyCycle = 0.0f,
             .vError1 = 0.0f,
-            .voltNetPGain = 1.7f, // Duty cycle % per volt
-            .voltNetIGain = 0.7f,  // Duty cycle % per volt-second
-            .voltNetDGain = 1.0f,
+            .voltNetPGain = 0.05f, // Duty cycle % per volt
+            .voltNetIGain = 1.0f,  // Duty cycle % per volt-second
+            .voltNetDGain = 0.0f,  // Duty cycle %-seconds per volt
             .servoAngle = 90.0f
         };
 UserInterface ui(
@@ -47,9 +49,12 @@ UserInterface ui(
                  ENCODER_B,
                  ENCODER_BUTTON);
 // Voltage modulation
-constexpr int PWM_MAX                    = (1 << PWM_RESOLUTION) - 1;
-float         voltageIntegralDutyPercent = 100.0f;
-uint32_t      previousVoltageControlUs   = 0;
+constexpr int PWM_MAX                  = (1 << PWM_RESOLUTION) - 1;
+float         voltageIntegralOutput1   = 0.0f;
+float         previousVoltage1         = 0.0f;
+float         filteredVoltageSlope1    = 0.0f;
+bool          voltageSlopeInitialized1 = false;
+uint32_t      previousVoltageControlUs = 0;
 
 
 void IRAM_ATTR handleEncoderInterrupt() {
@@ -159,34 +164,67 @@ void loop() {
 
     /* ######## Control Layer */
     // Voltage Control Net
-    // PI control
+    // Positional PID control
     const uint32_t nowUs          = micros();
     const float    elapsedSeconds =
             (nowUs - previousVoltageControlUs) / 1000000.0f;
     previousVoltageControlUs = nowUs;
 
-    systemState.vError1 = systemState.v1 - systemState.vSetPoint1;
+    if (voltageSlopeInitialized1 && elapsedSeconds > 0.0f) {
+        const float rawVoltageSlope1 =
+                (systemState.v1 - previousVoltage1) / elapsedSeconds;
+        const float filterAmount = elapsedSeconds /
+                (VOLTAGE_D_FILTER_TIME_SECONDS + elapsedSeconds);
 
-    const float proportionalDutyPercent =
-            systemState.vError1 * systemState.voltNetPGain;
+        filteredVoltageSlope1 += filterAmount *
+                (rawVoltageSlope1 - filteredVoltageSlope1);
+    }
 
-    voltageIntegralDutyPercent +=
-            systemState.vError1 *
-            systemState.voltNetIGain *
-            elapsedSeconds;
-    voltageIntegralDutyPercent = constrain(
-                                           voltageIntegralDutyPercent,
-                                           0.0f,
-                                           100.0f
-                                          );
+    previousVoltage1         = systemState.v1;
+    voltageSlopeInitialized1 = true;
 
-    const float dutyPercentDelta =
-            proportionalDutyPercent + voltageIntegralDutyPercent;
-    systemState.vFBDutyCycle = constrain(
-                                         dutyPercentDelta * (PWM_MAX / 100.0f),
-                                         0.0f,
-                                         static_cast<float>(PWM_MAX)
-                                        );
+    systemState.vError1                       = systemState.v1 - systemState.vSetPoint1;
+    const float voltageOutputWithoutIntegral1 =
+            VOLTAGE_DUTY_BIAS_PERCENT +
+            systemState.vError1 * systemState.voltNetPGain +
+            filteredVoltageSlope1 * systemState.voltNetDGain;
+
+    if (systemState.voltNetIGain == 0.0f) {
+        voltageIntegralOutput1 = 0.0f;
+    }
+    else if (elapsedSeconds > 0.0f) {
+        const float integralChange =
+                systemState.vError1 *
+                systemState.voltNetIGain *
+                elapsedSeconds;
+        const float outputBeforeIntegralChange =
+                voltageOutputWithoutIntegral1 + voltageIntegralOutput1;
+        const bool outputWithinLimits =
+                outputBeforeIntegralChange >= 0.0f &&
+                outputBeforeIntegralChange <= 100.0f;
+        const bool integralMovesTowardLimits =
+                (outputBeforeIntegralChange > 100.0f &&
+                    integralChange < 0.0f) ||
+                (outputBeforeIntegralChange < 0.0f &&
+                    integralChange > 0.0f);
+
+        if (outputWithinLimits || integralMovesTowardLimits) {
+            voltageIntegralOutput1 += integralChange;
+            voltageIntegralOutput1 = constrain(
+                                               voltageIntegralOutput1,
+                                               -voltageOutputWithoutIntegral1,
+                                               100.0f - voltageOutputWithoutIntegral1
+                                              );
+        }
+    }
+
+    const float voltageDutyPercent1 = constrain(
+                                                voltageOutputWithoutIntegral1 + voltageIntegralOutput1,
+                                                0.0f,
+                                                100.0f
+                                               );
+    systemState.vFBDutyCycle =
+            voltageDutyPercent1 * (PWM_MAX / 100.0f);
     analogWrite(VOLTAGE_FEEDBACK_NET_PIN_1, systemState.vFBDutyCycle);
 
 
