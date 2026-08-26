@@ -23,6 +23,7 @@ class UserInterface {
         enum class Screen : uint8_t {
             Dashboard,
             MainMenu,
+            ServoControlMenu,
             PidMenu,
             VoltageSenseMenu,
             ErrorGraph,
@@ -48,6 +49,8 @@ class UserInterface {
         uint8_t selectedDashboardColumn_ = 0;
         uint8_t selectedMainItem_         = 0;
         uint8_t mainMenuTopItem_     = 0;
+        uint8_t selectedServoControlItem_ = 0;
+        uint8_t servoControlMenuTopItem_  = 0;
         uint8_t selectedPidItem_     = 0;
         uint8_t pidMenuTopItem_      = 0;
         uint8_t selectedVoltageSenseItem_  = 0;
@@ -86,6 +89,10 @@ class UserInterface {
                 bool              displayUpdateAllowed
                 );
         bool renderMainMenu(
+                const InputEvent& inputEvent,
+                bool              displayUpdateAllowed
+                );
+        bool renderServoControlMenu(
                 const InputEvent& inputEvent,
                 bool              displayUpdateAllowed
                 );

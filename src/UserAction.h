@@ -13,6 +13,8 @@ class UserAction {
             AdjustVoltageSenseOffset1,
             AdjustVoltageSenseOffset2,
             AdjustServoAngle,
+            AdjustServoDegreesPerClick,
+            AdjustServoMaxAngle,
             AdjustPGain,
             AdjustIGain,
             AdjustDGain
@@ -34,6 +36,14 @@ class UserAction {
 
         static UserAction adjustServoAngle(float deltaDegrees) {
             return UserAction(Type::AdjustServoAngle, deltaDegrees);
+        }
+
+        static UserAction adjustServoDegreesPerClick(float deltaDegrees) {
+            return UserAction(Type::AdjustServoDegreesPerClick, deltaDegrees);
+        }
+
+        static UserAction adjustServoMaxAngle(float deltaDegrees) {
+            return UserAction(Type::AdjustServoMaxAngle, deltaDegrees);
         }
 
         static UserAction adjustPGain(float delta) {

@@ -8,7 +8,6 @@ namespace {
     constexpr uint32_t BUTTON_LONG_PRESS_MS       = 700;
     constexpr uint32_t DISPLAY_UPDATE_INTERVAL_MS = 50;
     constexpr float    VOLTAGE_SET_POINT_STEP     = 0.1f;
-    constexpr float    SERVO_ANGLE_STEP           = 1.0f;
 
     constexpr float PID_GAIN_DIGIT_STEPS[] = {
                 100.0f,
@@ -27,6 +26,7 @@ namespace {
     constexpr uint8_t MENU_VISIBLE_ROWS = 5;
 
     const char* const MAIN_MENU_ITEMS[] = {
+                "Servo Control",
                 "PID Tuning",
                 "Voltage Sense",
                 "Output Setup",
@@ -37,6 +37,15 @@ namespace {
 
     constexpr uint8_t MAIN_MENU_ITEM_COUNT =
             sizeof(MAIN_MENU_ITEMS) / sizeof(MAIN_MENU_ITEMS[0]);
+
+    const char* const SERVO_CONTROL_MENU_ITEMS[] = {
+                "Degrees / Click",
+                "Maximum Angle"
+            };
+
+    constexpr uint8_t SERVO_CONTROL_MENU_ITEM_COUNT =
+            sizeof(SERVO_CONTROL_MENU_ITEMS) /
+            sizeof(SERVO_CONTROL_MENU_ITEMS[0]);
 
     const char* const PID_MENU_ITEMS[] = {
                 "Error Graph",
@@ -146,6 +155,13 @@ UserAction UserInterface::tick() {
                                             inputEvent,
                                             displayUpdateAllowed
                                            );
+            break;
+
+        case Screen::ServoControlMenu:
+            displayUpdated = renderServoControlMenu(
+                                                      inputEvent,
+                                                      displayUpdateAllowed
+                                                     );
             break;
 
         case Screen::PidMenu:
@@ -285,7 +301,9 @@ UserAction UserInterface::createUserAction(
                                                     );
         }
 
-        return UserAction::adjustServoAngle(delta * SERVO_ANGLE_STEP);
+        return UserAction::adjustServoAngle(
+                                             delta * systemState_->servoDegreesPerClick
+                                            );
     }
 
     if (
@@ -311,6 +329,12 @@ UserAction UserInterface::createUserAction(
 
             case 4:
                 return UserAction::adjustVoltageSenseOffset2(gainDelta);
+
+            case 5:
+                return UserAction::adjustServoDegreesPerClick(gainDelta);
+
+            case 6:
+                return UserAction::adjustServoMaxAngle(gainDelta);
         }
     }
 
@@ -400,7 +424,13 @@ bool UserInterface::renderDashboard(
     ssd1306_printFixed(0, 32, line, STYLE_NORMAL);
 
     // Output column
-    snprintf(line, sizeof(line), "DEG %6.0f", systemState_->servoAngle);
+    snprintf(
+             line,
+             sizeof(line),
+             "DEG%3.0f/%3.0f",
+             systemState_->servoAngle,
+             systemState_->servoMaxAngle
+            );
     ssd1306_printFixed(66, 8, line, STYLE_NORMAL);
 
     snprintf(line, sizeof(line), "PWM %4dus", systemState_->servoPulseUs);
@@ -431,9 +461,12 @@ bool UserInterface::renderMainMenu(
 
     if (inputEvent.encoderButtonClicked) {
         if (selectedMainItem_ == 0) {
-            openScreen(Screen::PidMenu);
+            openScreen(Screen::ServoControlMenu);
         }
         else if (selectedMainItem_ == 1) {
+            openScreen(Screen::PidMenu);
+        }
+        else if (selectedMainItem_ == 2) {
             openScreen(Screen::VoltageSenseMenu);
         }
         else {
@@ -455,6 +488,50 @@ bool UserInterface::renderMainMenu(
                MAIN_MENU_ITEM_COUNT,
                selectedMainItem_,
                mainMenuTopItem_
+              );
+
+    return true;
+}
+
+
+bool UserInterface::renderServoControlMenu(
+        const InputEvent& inputEvent,
+        bool              displayUpdateAllowed
+        ) {
+    if (inputEvent.encoderDelta != 0) {
+        moveSelection(
+                      inputEvent.encoderDelta,
+                      SERVO_CONTROL_MENU_ITEM_COUNT,
+                      selectedServoControlItem_,
+                      servoControlMenuTopItem_
+                     );
+        displayDirty_ = true;
+    }
+
+    if (inputEvent.encoderButtonLongPressed) {
+        openScreen(Screen::MainMenu);
+        return false;
+    }
+
+    if (inputEvent.encoderButtonClicked) {
+        selectedGain_      = selectedServoControlItem_ + 5;
+        selectedGainDigit_ = 2;
+        editingGainDigit_  = false;
+        openScreen(Screen::GainEditor);
+        return false;
+    }
+
+    if (!displayUpdateAllowed) {
+        return false;
+    }
+
+    beginDisplayUpdate();
+    renderMenu(
+               "SERVO CONTROL",
+               SERVO_CONTROL_MENU_ITEMS,
+               SERVO_CONTROL_MENU_ITEM_COUNT,
+               selectedServoControlItem_,
+               servoControlMenuTopItem_
               );
 
     return true;
@@ -641,7 +718,9 @@ bool UserInterface::renderGainEditor(
         editingGainDigit_ = false;
         openScreen(
                    selectedGain_ < 3 ?
-                           Screen::PidMenu : Screen::VoltageSenseMenu
+                           Screen::PidMenu :
+                   selectedGain_ < 5 ?
+                           Screen::VoltageSenseMenu : Screen::ServoControlMenu
                   );
         return false;
     }
@@ -692,6 +771,14 @@ bool UserInterface::renderGainEditor(
         case 4:
             value = systemState_->voltageSenseOffset2;
             break;
+
+        case 5:
+            value = systemState_->servoDegreesPerClick;
+            break;
+
+        case 6:
+            value = systemState_->servoMaxAngle;
+            break;
     }
 
     char valueText[9];
@@ -707,7 +794,9 @@ bool UserInterface::renderGainEditor(
 
     const char* editorTitle = selectedGain_ < 3 ?
             PID_MENU_ITEMS[selectedGain_ + 1] :
-            selectedGain_ == 3 ? "Buck 1 Corr" : "Buck 2 Corr";
+            selectedGain_ == 3 ? "Buck 1 Corr" :
+            selectedGain_ == 4 ? "Buck 2 Corr" :
+            selectedGain_ == 5 ? "Deg/Click" : "Max Angle";
 
     ssd1306_printFixed(0, 0, editorTitle, STYLE_NORMAL);
     ssd1306_printFixed(66, 0, "Hold:back", STYLE_NORMAL);
@@ -812,8 +901,9 @@ void UserInterface::renderStatusBar() const {
     snprintf(
              line,
              sizeof(line),
-             "DEG %6.0f",
-             systemState_->servoAngle
+             "DEG%3.0f/%3.0f",
+             systemState_->servoAngle,
+             systemState_->servoMaxAngle
             );
     ssd1306_printFixed(66, 48, line, STYLE_NORMAL);
 

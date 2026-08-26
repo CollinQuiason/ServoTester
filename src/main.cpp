@@ -47,6 +47,8 @@ SystemState systemState = {
             .voltNetIGain = 1.0f,  // Duty cycle % per volt-second
             .voltNetDGain = 0.0f,  // Duty cycle %-seconds per volt
             .servoAngle = 90.0f,
+            .servoDegreesPerClick = 5.0f,
+            .servoMaxAngle = 180.0f,
             .servoPulseUs = 1500
         };
 Servo servo;
@@ -98,8 +100,31 @@ void handleUserAction(const UserAction& action) {
             systemState.servoAngle = constrain(
                                                systemState.servoAngle + action.delta(),
                                                0.0f,
-                                               180.0f
+                                               systemState.servoMaxAngle
                                               );
+            servo.write(systemState.servoAngle);
+            systemState.servoPulseUs = servo.readMicroseconds();
+            break;
+
+        case UserAction::Type::AdjustServoDegreesPerClick:
+            systemState.servoDegreesPerClick = constrain(
+                    systemState.servoDegreesPerClick + action.delta(),
+                    1.0f,
+                    180.0f
+                );
+            break;
+
+        case UserAction::Type::AdjustServoMaxAngle:
+            systemState.servoMaxAngle = constrain(
+                    systemState.servoMaxAngle + action.delta(),
+                    1.0f,
+                    180.0f
+                );
+            systemState.servoAngle = constrain(
+                    systemState.servoAngle,
+                    0.0f,
+                    systemState.servoMaxAngle
+                );
             servo.write(systemState.servoAngle);
             systemState.servoPulseUs = servo.readMicroseconds();
             break;
