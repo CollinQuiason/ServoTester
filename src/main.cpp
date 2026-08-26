@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+#include <ESP32Servo.h>
 #include <RotaryEncoder.h>
 #include "ssd1306.h"
 
@@ -19,6 +20,8 @@ constexpr uint32_t PWM_FREQUENCY         = 5000;
 constexpr uint8_t VOLTAGE_PIN_1              = 36;
 constexpr uint8_t VOLTAGE_PIN_2              = 39;
 constexpr uint8_t VOLTAGE_FEEDBACK_NET_PIN_1 = 25;
+constexpr uint8_t SERVO_PWM_PIN_1             = 17;
+constexpr uint8_t SERVO_PWM_PIN_2             = 16;
 constexpr uint8_t ENCODER_A                  = 27;
 constexpr uint8_t ENCODER_B                  = 14;
 constexpr uint8_t ENCODER_BUTTON             = 13;
@@ -35,16 +38,18 @@ constexpr int8_t   EDGES_PER_DETENT = 4;
 SystemState systemState = {
             .v1 = 0.0f,
             .v2 = 0.0f,
-            .voltageSenseOffset1 = -0.4f,
-            .voltageSenseOffset2 = -0.4f,
+            .voltageSenseOffset1 = -0.3f,
+            .voltageSenseOffset2 = -0.3f,
             .vSetPoint1 = 0.0f,
             .vFBDutyCycle = 0.0f,
             .vError1 = 0.0f,
             .voltNetPGain = 0.05f, // Duty cycle % per volt
             .voltNetIGain = 1.0f,  // Duty cycle % per volt-second
             .voltNetDGain = 0.0f,  // Duty cycle %-seconds per volt
-            .servoAngle = 90.0f
+            .servoAngle = 90.0f,
+            .servoPulseUs = 1500
         };
+Servo servo;
 UserInterface ui(
                  &systemState,
                  ENCODER_A,
@@ -95,6 +100,8 @@ void handleUserAction(const UserAction& action) {
                                                0.0f,
                                                180.0f
                                               );
+            servo.write(systemState.servoAngle);
+            systemState.servoPulseUs = servo.readMicroseconds();
             break;
 
         case UserAction::Type::AdjustPGain:
@@ -144,6 +151,10 @@ void setup() {
     analogWriteFrequency(PWM_FREQUENCY);
     systemState.vFBDutyCycle = PWM_MAX;
     Serial.print("Voltage sens/modulation net initialized!\n");
+    // Servo Output
+    servo.attach(SERVO_PWM_PIN_1);
+    servo.write(systemState.servoAngle);
+    systemState.servoPulseUs = servo.readMicroseconds();
     // OLED Panel
     Serial.print("Initializing OLED panel...\n");
     ui.begin();

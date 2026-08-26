@@ -403,7 +403,7 @@ bool UserInterface::renderDashboard(
     snprintf(line, sizeof(line), "DEG %6.0f", systemState_->servoAngle);
     ssd1306_printFixed(66, 8, line, STYLE_NORMAL);
 
-    snprintf(line, sizeof(line), "PWM %6s", "----us");
+    snprintf(line, sizeof(line), "PWM %4dus", systemState_->servoPulseUs);
     ssd1306_printFixed(66, 16, line, STYLE_NORMAL);
 
     return true;
@@ -817,7 +817,7 @@ void UserInterface::renderStatusBar() const {
             );
     ssd1306_printFixed(66, 48, line, STYLE_NORMAL);
 
-    snprintf(line, sizeof(line), "PWM %6s", "----us");
+    snprintf(line, sizeof(line), "PWM %4dus", systemState_->servoPulseUs);
     ssd1306_printFixed(66, 56, line, STYLE_NORMAL);
 }
 

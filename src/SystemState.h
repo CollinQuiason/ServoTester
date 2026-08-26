@@ -12,4 +12,5 @@ struct SystemState {
     float voltNetIGain;
     float voltNetDGain;
     float servoAngle;
+    int servoPulseUs;
 };
