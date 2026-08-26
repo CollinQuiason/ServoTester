@@ -35,6 +35,8 @@ constexpr int8_t   EDGES_PER_DETENT = 4;
 SystemState systemState = {
             .v1 = 0.0f,
             .v2 = 0.0f,
+            .voltageSenseOffset1 = -0.3f,
+            .voltageSenseOffset2 = -0.3f,
             .vSetPoint1 = 0.0f,
             .vFBDutyCycle = 0.0f,
             .vError1 = 0.0f,
@@ -69,6 +71,22 @@ void handleUserAction(const UserAction& action) {
     switch (action.type()) {
         case UserAction::Type::AdjustVoltageSetPoint:
             systemState.vSetPoint1 += action.delta();
+            break;
+
+        case UserAction::Type::AdjustVoltageSenseOffset1:
+            systemState.voltageSenseOffset1 = constrain(
+                    systemState.voltageSenseOffset1 + action.delta(),
+                    -999.999f,
+                    999.999f
+                );
+            break;
+
+        case UserAction::Type::AdjustVoltageSenseOffset2:
+            systemState.voltageSenseOffset2 = constrain(
+                    systemState.voltageSenseOffset2 + action.delta(),
+                    -999.999f,
+                    999.999f
+                );
             break;
 
         case UserAction::Type::AdjustServoAngle:
@@ -159,8 +177,10 @@ void loop() {
 
     /* ######## Compute Layer */
     // Voltage Control Net PID
-    systemState.v1 = rawMV1 * DIVIDER_RATIO / 1000.0f;
-    systemState.v2 = rawMV2 * DIVIDER_RATIO / 1000.0f;
+    systemState.v1 = rawMV1 * DIVIDER_RATIO / 1000.0f +
+            systemState.voltageSenseOffset1;
+    systemState.v2 = rawMV2 * DIVIDER_RATIO / 1000.0f +
+            systemState.voltageSenseOffset2;
 
     /* ######## Control Layer */
     // Voltage Control Net

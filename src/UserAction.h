@@ -1,6 +1,8 @@
 #pragma once
 
+
 #include <stdint.h>
+
 
 
 class UserAction {
@@ -8,6 +10,8 @@ class UserAction {
         enum class Type : uint8_t {
             None,
             AdjustVoltageSetPoint,
+            AdjustVoltageSenseOffset1,
+            AdjustVoltageSenseOffset2,
             AdjustServoAngle,
             AdjustPGain,
             AdjustIGain,
@@ -18,6 +22,14 @@ class UserAction {
 
         static UserAction adjustVoltageSetPoint(float delta) {
             return UserAction(Type::AdjustVoltageSetPoint, delta);
+        }
+
+        static UserAction adjustVoltageSenseOffset1(float delta) {
+            return UserAction(Type::AdjustVoltageSenseOffset1, delta);
+        }
+
+        static UserAction adjustVoltageSenseOffset2(float delta) {
+            return UserAction(Type::AdjustVoltageSenseOffset2, delta);
         }
 
         static UserAction adjustServoAngle(float deltaDegrees) {

@@ -28,6 +28,7 @@ namespace {
 
     const char* const MAIN_MENU_ITEMS[] = {
                 "PID Tuning",
+                "Voltage Sense",
                 "Output Setup",
                 "Signal Generator",
                 "Display",
@@ -46,6 +47,15 @@ namespace {
 
     constexpr uint8_t PID_MENU_ITEM_COUNT =
             sizeof(PID_MENU_ITEMS) / sizeof(PID_MENU_ITEMS[0]);
+
+    const char* const VOLTAGE_SENSE_MENU_ITEMS[] = {
+                "Buck 1 K Offset",
+                "Buck 2 K Offset"
+            };
+
+    constexpr uint8_t VOLTAGE_SENSE_MENU_ITEM_COUNT =
+            sizeof(VOLTAGE_SENSE_MENU_ITEMS) /
+            sizeof(VOLTAGE_SENSE_MENU_ITEMS[0]);
 }
 
 
@@ -143,6 +153,13 @@ UserAction UserInterface::tick() {
                                            inputEvent,
                                            displayUpdateAllowed
                                           );
+            break;
+
+        case Screen::VoltageSenseMenu:
+            displayUpdated = renderVoltageSenseMenu(
+                                                     inputEvent,
+                                                     displayUpdateAllowed
+                                                    );
             break;
 
         case Screen::ErrorGraph:
@@ -288,6 +305,12 @@ UserAction UserInterface::createUserAction(
 
             case 2:
                 return UserAction::adjustDGain(gainDelta);
+
+            case 3:
+                return UserAction::adjustVoltageSenseOffset1(gainDelta);
+
+            case 4:
+                return UserAction::adjustVoltageSenseOffset2(gainDelta);
         }
     }
 
@@ -410,6 +433,9 @@ bool UserInterface::renderMainMenu(
         if (selectedMainItem_ == 0) {
             openScreen(Screen::PidMenu);
         }
+        else if (selectedMainItem_ == 1) {
+            openScreen(Screen::VoltageSenseMenu);
+        }
         else {
             selectedPlaceholder_ = selectedMainItem_;
             openScreen(Screen::Placeholder);
@@ -429,6 +455,50 @@ bool UserInterface::renderMainMenu(
                MAIN_MENU_ITEM_COUNT,
                selectedMainItem_,
                mainMenuTopItem_
+              );
+
+    return true;
+}
+
+
+bool UserInterface::renderVoltageSenseMenu(
+        const InputEvent& inputEvent,
+        bool              displayUpdateAllowed
+        ) {
+    if (inputEvent.encoderDelta != 0) {
+        moveSelection(
+                      inputEvent.encoderDelta,
+                      VOLTAGE_SENSE_MENU_ITEM_COUNT,
+                      selectedVoltageSenseItem_,
+                      voltageSenseMenuTopItem_
+                     );
+        displayDirty_ = true;
+    }
+
+    if (inputEvent.encoderButtonLongPressed) {
+        openScreen(Screen::MainMenu);
+        return false;
+    }
+
+    if (inputEvent.encoderButtonClicked) {
+        selectedGain_      = selectedVoltageSenseItem_ + 3;
+        selectedGainDigit_ = 4;
+        editingGainDigit_  = false;
+        openScreen(Screen::GainEditor);
+        return false;
+    }
+
+    if (!displayUpdateAllowed) {
+        return false;
+    }
+
+    beginDisplayUpdate();
+    renderMenu(
+               "VOLT SENSE TUNING",
+               VOLTAGE_SENSE_MENU_ITEMS,
+               VOLTAGE_SENSE_MENU_ITEM_COUNT,
+               selectedVoltageSenseItem_,
+               voltageSenseMenuTopItem_
               );
 
     return true;
@@ -569,7 +639,10 @@ bool UserInterface::renderGainEditor(
         ) {
     if (inputEvent.encoderButtonLongPressed) {
         editingGainDigit_ = false;
-        openScreen(Screen::PidMenu);
+        openScreen(
+                   selectedGain_ < 3 ?
+                           Screen::PidMenu : Screen::VoltageSenseMenu
+                  );
         return false;
     }
 
@@ -597,34 +670,46 @@ bool UserInterface::renderGainEditor(
 
     beginDisplayUpdate();
 
-    float gain = 0.0f;
+    float value = 0.0f;
 
     switch (selectedGain_) {
         case 0:
-            gain = systemState_->voltNetPGain;
+            value = systemState_->voltNetPGain;
             break;
 
         case 1:
-            gain = systemState_->voltNetIGain;
+            value = systemState_->voltNetIGain;
             break;
 
         case 2:
-            gain = systemState_->voltNetDGain;
+            value = systemState_->voltNetDGain;
+            break;
+
+        case 3:
+            value = systemState_->voltageSenseOffset1;
+            break;
+
+        case 4:
+            value = systemState_->voltageSenseOffset2;
             break;
     }
 
-    char gainText[8];
-    snprintf(gainText, sizeof(gainText), "%07.3f", gain);
+    char valueText[9];
+    snprintf(valueText, sizeof(valueText), "%07.3f", value);
 
     char line[22];
-    snprintf(line, sizeof(line), "Value: %s", gainText);
+    snprintf(line, sizeof(line), "Value: %s", valueText);
 
     const uint8_t selectedDigitX = static_cast<uint8_t>(
             42 +
             (selectedGainDigit_ + (selectedGainDigit_ >= 3 ? 1 : 0)) * 6
         );
 
-    ssd1306_printFixed(0, 0, PID_MENU_ITEMS[selectedGain_ + 1], STYLE_NORMAL);
+    const char* editorTitle = selectedGain_ < 3 ?
+            PID_MENU_ITEMS[selectedGain_ + 1] :
+            selectedGain_ == 3 ? "Buck 1 Corr" : "Buck 2 Corr";
+
+    ssd1306_printFixed(0, 0, editorTitle, STYLE_NORMAL);
     ssd1306_printFixed(66, 0, "Hold:back", STYLE_NORMAL);
     ssd1306_printFixed(0, 8, line, STYLE_NORMAL);
     ssd1306_printFixed(selectedDigitX, 16, "^", STYLE_NORMAL);

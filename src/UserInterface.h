@@ -24,6 +24,7 @@ class UserInterface {
             Dashboard,
             MainMenu,
             PidMenu,
+            VoltageSenseMenu,
             ErrorGraph,
             GainEditor,
             Placeholder
@@ -49,6 +50,8 @@ class UserInterface {
         uint8_t mainMenuTopItem_     = 0;
         uint8_t selectedPidItem_     = 0;
         uint8_t pidMenuTopItem_      = 0;
+        uint8_t selectedVoltageSenseItem_  = 0;
+        uint8_t voltageSenseMenuTopItem_   = 0;
         uint8_t selectedGain_        = 0;
         uint8_t selectedGainDigit_   = 4;
         uint8_t selectedPlaceholder_ = 0;
@@ -87,6 +90,10 @@ class UserInterface {
                 bool              displayUpdateAllowed
                 );
         bool renderPidMenu(
+                const InputEvent& inputEvent,
+                bool              displayUpdateAllowed
+                );
+        bool renderVoltageSenseMenu(
                 const InputEvent& inputEvent,
                 bool              displayUpdateAllowed
                 );
